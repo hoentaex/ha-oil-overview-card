@@ -71,3 +71,31 @@ test("comparison: badges red for more, green for less, blue for degree days; mes
   const html = compareSection(lastMonths(history(1).slice(-200), TZ, now), { t, lang: "de" });
   assert.match(html, /mehr als ein Jahr/);
 });
+
+test("price view: weekly means, low and high with calendar week, delivery cost only for the last delivery", async () => {
+  const { priceView } = await import("../src/charts.js");
+  const { isoWeek } = await import("../src/data.js");
+  const weeks = [0, 1, 2, 3].map((i) => ({
+    start: new Date(zoned(2026, 0, 5 + 7 * i, 0, TZ)),
+    mean: [100, 96, 98, 110][i],
+  }));
+  const v = priceView(weeks, {
+    t: translator("de"),
+    lang: "de",
+    tz: TZ,
+    current: 112,
+    paid: 98,
+    deliveries: [
+      { start: new Date(zoned(2026, 0, 6, 12, TZ)), litres: 500 },
+      { start: new Date(zoned(2026, 0, 28, 12, TZ)), litres: 2386 },
+    ],
+    week: isoWeek,
+  });
+  assert.match(v.rest, /112,00/);
+  assert.match(v.rest, /Tief 96,00 \(KW 3\/26\) · Hoch 110,00 \(KW 5\/26\)/);
+  assert.match(v.rest, /\+14 % ggü\. Lieferpreis/);
+  assert.match(v.at(0), /Lieferung 500 L<\/span>|Lieferung 500 L/);
+  assert.doesNotMatch(v.at(0), /≈/);
+  assert.match(v.at(3), /2\.386 L · ≈ 2\.338 €/);
+  assert.deepEqual(isoWeek(new Date(zoned(2026, 10, 15, 12, TZ)), TZ), { week: 46, year: 2026 });
+});

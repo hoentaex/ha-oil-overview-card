@@ -18,6 +18,8 @@ export const CONFIG = {
   refill_date_entity: "input_datetime.heizol_letzte_befullung",
   refill_amount_entity: "input_number.heizol_letzte_liefermenge",
   outdoor_temp_entity: "sensor.wolf_aussentemperatur",
+  price_entity: "sensor.heizol_tagespreis",
+  paid_price_entity: "input_number.heizol_preis",
   capacity: CAPACITY,
   reserve: 300,
 };
@@ -83,8 +85,35 @@ export function simulate(now = new Date()) {
   return days;
 }
 
-/** recorder/statistics_during_period for the level and the temperature, period "day". */
+const PRICE_NOW = 169.34;
+const PRICE_PAID = 98.6;
+
+/** Weekly mean prices (Monday weeks) over the last two years, ending near today's price. Example values. */
+function weeklyPrices(start, end) {
+  const rand = rng(424242);
+  const mondays = [];
+  for (let d = dayStart(new Date(start), TZ, 0); d < end; d = dayStart(d, TZ, 1))
+    if (parts(d.getTime(), TZ).wd === 1) mondays.push(d);
+  const n = mondays.length;
+  return mondays.map((d, i) => {
+    const f = n > 1 ? i / (n - 1) : 1;
+    const v = 100 + (PRICE_NOW - 100) * f ** 1.8 + 5 * Math.sin(i / 4.5) * (1 - f) + (rand() - 0.5) * 3;
+    return {
+      start: d.getTime(),
+      end: d.getTime() + 7 * 864e5,
+      mean: Math.round((i === n - 1 ? PRICE_NOW : v) * 100) / 100,
+    };
+  });
+}
+
+/** recorder/statistics_during_period: daily level and temperature, weekly price. */
 function statistics(msg) {
+  if (msg.period === "week")
+    return Object.fromEntries(
+      msg.statistic_ids
+        .filter((id) => id === CONFIG.price_entity)
+        .map((id) => [id, weeklyPrices(Date.parse(msg.start_time), Date.parse(msg.end_time))]),
+    );
   const start = Date.parse(msg.start_time);
   const end = Date.parse(msg.end_time);
   const days = simulate().filter((d) => d.start.getTime() >= start && d.start.getTime() < end);
@@ -140,6 +169,8 @@ export function makeHass({ lang = "de", level = 2264, unavailable = false } = {}
         timestamp: refill.getTime() / 1000,
       }),
       [CONFIG.refill_amount_entity]: st(2386, { unit_of_measurement: "L" }),
+      [CONFIG.price_entity]: st(PRICE_NOW, { unit_of_measurement: "€/100 L", state_class: "measurement" }),
+      [CONFIG.paid_price_entity]: st(PRICE_PAID, { unit_of_measurement: "€/100 L" }),
       [CONFIG.outdoor_temp_entity]: st(simulate().at(-1).temp, { unit_of_measurement: "°C" }),
     },
     callWS: async (msg) => {

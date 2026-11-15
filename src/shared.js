@@ -1,6 +1,6 @@
 // Shared helpers: i18n (de / en), number and date formatting, config defaults and section names.
 
-export const SECTIONS = ["header", "tank", "consumption", "range", "compare", "footer"];
+export const SECTIONS = ["header", "tank", "consumption", "range", "price", "compare", "footer"];
 export const VIEWS = ["days", "months", "level"];
 
 export const DEFAULTS = {
@@ -16,6 +16,10 @@ export const DEFAULTS = {
   refill_date_entity: "",
   refill_amount_entity: "",
   outdoor_temp_entity: "",
+  price_entity: "",
+  paid_price_entity: "",
+  price_per_litres: 100,
+  currency: "€",
   heating_base_temp: 15,
   refill_threshold: 100,
   default_view: "days",
@@ -123,6 +127,29 @@ const STRINGS = {
       "Heizgradtage aus den Tagesmitteln der Außentemperatur. Der laufende Monat zählt in beiden Jahren nur bis heute.",
     hint_compare_partial:
       "Summen und Kennzahlen nur über die {n} Monate, die in beiden Jahren vollständig sind. Der laufende Monat zählt in beiden Jahren nur bis heute.",
+    price: "Heizölpreis",
+    price_now: "€/100 L · aktuell",
+    price_week: "€/100 L · Wochenmittel {w}",
+    price_lo_hi: "Tief {lo} ({lw}) · Hoch {hi} ({hw})",
+    vs_paid: "{p} % ggü. Lieferpreis",
+    price_mean: "Ø {n} Wochen {v}",
+    delivery_week: "Lieferung {l} · ≈ {c} €",
+    delivery_week_np: "Lieferung {l}",
+    kw: "KW {w}/{y}",
+    lg_week_mean: "Wochenmittel (Mo–So)",
+    lg_mean_weeks: "Ø {n} Wochen",
+    hint_price: "Wochenmittel aus der Langzeitstatistik von {id}, ohne Prognose. Grüne Punkte: Wochen mit Lieferung.",
+    price_starting: "Der Verlauf beginnt, sobald es zwei Wochenmittel gibt.",
+    price_none: "Kein Preis",
+    f_month: "{m}",
+    f_year: "Jahr {y}",
+    f_prev_upto: "Vj. bis {d}.: {l}",
+    f_prev_ytd: "Vj. bis heute: {l}",
+    f_costs: "Kosten {m}",
+    f_costs_at: "zu {p} €/100 L",
+    f_value: "Tankinhalt wert",
+    f_value_d: "zum Tagespreis",
+    f_value_paid: "zum Lieferpreis",
     hint_level: "Ein Anstieg um mehr als {l} gilt als Lieferung, kleinere Anstiege als Messrauschen.",
   },
   en: {
@@ -224,6 +251,29 @@ const STRINGS = {
       "Heating degree days from the daily mean outdoor temperature. The running month counts only up to today in both years.",
     hint_compare_partial:
       "Totals and figures only over the {n} months complete in both years. The running month counts only up to today in both years.",
+    price: "Heating oil price",
+    price_now: "€/100 L · now",
+    price_week: "€/100 L · weekly mean {w}",
+    price_lo_hi: "Low {lo} ({lw}) · high {hi} ({hw})",
+    vs_paid: "{p} % vs. paid",
+    price_mean: "{n}-week mean {v}",
+    delivery_week: "Delivery {l} · ≈ {c} €",
+    delivery_week_np: "Delivery {l}",
+    kw: "W{w}/{y}",
+    lg_week_mean: "weekly mean (Mon–Sun)",
+    lg_mean_weeks: "{n}-week mean",
+    hint_price: "Weekly means from the long-term statistics of {id}, no forecast. Green dots: weeks with a delivery.",
+    price_starting: "The history starts once there are two weekly means.",
+    price_none: "No price",
+    f_month: "{m}",
+    f_year: "Year {y}",
+    f_prev_upto: "prev. to the {d}th: {l}",
+    f_prev_ytd: "prev. to date: {l}",
+    f_costs: "Costs {m}",
+    f_costs_at: "at {p} €/100 L",
+    f_value: "Oil in tank worth",
+    f_value_d: "at today's price",
+    f_value_paid: "at the price paid",
     hint_level: "A rise of more than {l} counts as a delivery, smaller rises as measurement noise.",
   },
 };

@@ -136,3 +136,28 @@ export function compareSection(months, { t, lang }) {
     <div class="hint">${esc(t(both.length === months.length ? "hint_compare" : "hint_compare_partial", { n: both.length }))}</div>
   </section>`;
 }
+
+/** The price panel; the chart itself is filled in by the card (it needs the DOM for scrubbing). */
+export function priceSection({ t }, note) {
+  return `<section class="price">
+    ${title("euro", t("price"), note)}
+    <div class="panel">
+      <div class="readout" id="p-readout"></div>
+      <div class="plot small" id="p-plot"></div>
+      <div class="axis" id="p-axis"></div>
+      <div class="legend" id="p-legend"></div>
+      <div class="hint" id="p-hint"></div>
+    </div>
+  </section>`;
+}
+
+/** Footer figures: this month, this year, costs of the month and value of the oil in the tank. */
+export function footerSection(items) {
+  if (!items.length) return "";
+  return `<div class="footer">${items
+    .map(
+      ({ k, v, d, cls = "" }) =>
+        `<div><div class="k">${esc(k)}</div><div class="v num">${esc(v)}</div>${d ? `<div class="d num ${cls}">${esc(d)}</div>` : ""}</div>`,
+    )
+    .join("")}</div>`;
+}

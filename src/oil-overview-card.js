@@ -7,11 +7,23 @@
  *
  * Layout and look follow the cards of juju35 (https://github.com/juju35). MIT licence.
  */
-import { daysView, H, levelView, monthsView, W } from "./charts.js";
-import { Cache, deriveDays, fetchDaily, lastDays, lastMonths, tempsByDay, yearToDate } from "./data.js";
+import { daysView, H, levelView, monthsView, PH, priceView, W } from "./charts.js";
+import {
+  Cache,
+  deliveries,
+  deriveDays,
+  fetchDaily,
+  fetchWeekly,
+  isoWeek,
+  lastDays,
+  lastMonths,
+  tempsByDay,
+  yearToDate,
+} from "./data.js";
 import { scenarios } from "./forecast.js";
-import { compareSection, rangeSection } from "./sections.js";
+import { compareSection, footerSection, priceSection, rangeSection } from "./sections.js";
 import { svgIcon } from "./icons.js";
+import { scrub } from "./scrub.js";
 import { readTank, STATUS_COLOR, statusOf } from "./oil.js";
 import {
   DEFAULTS,
@@ -162,18 +174,115 @@ export class OilOverviewCard extends OilCardBase {
       if (this._data?.days.length > 1) {
         const ctx = { ...x, reserve: x.tank.reserve };
         if (show("range")) body += rangeSection(this._scen || [], ctx);
+        if (show("price") && (config.price_entity || config.paid_price_entity)) body += priceSection(ctx, "");
         if (show("compare")) {
           const base = Number(config.heating_base_temp) || 15;
           body += compareSection(lastMonths(this._data.days, x.tz, x.now, { temps: this._data.temps, base }), ctx);
         }
       }
+      if (show("footer")) body += footerSection(this._footer(x));
     }
     this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card>
       ${show("header") ? this._header(x) : ""}
       <div class="content">${body}</div>
     </ha-card>`;
     this._mountChart();
+    this._mountPrice();
     this._maybeLoad();
+  }
+
+  /** Current market price (price sensor) and the price paid for the last delivery, both per 100 L. */
+  _prices() {
+    const c = this._config;
+    const per = Number(c.price_per_litres) || 100;
+    const num = (id) => {
+      const v = Number.parseFloat(this._hass.states[id]?.state);
+      return Number.isFinite(v) && v > 0 ? (v * 100) / per : null;
+    };
+    return {
+      current: c.price_entity ? num(c.price_entity) : null,
+      paid: c.paid_price_entity ? num(c.paid_price_entity) : null,
+    };
+  }
+
+  _footer({ t, lang, tz, now, tank }) {
+    const items = [];
+    const { current, paid } = this._prices();
+    const price = current ?? paid;
+    const euro = (v) => `≈ ${fmtNum(v, lang)} €`;
+    if (this._data?.days.length > 1) {
+      const m = lastMonths(this._data.days, tz, now).at(-1);
+      const name = new Date(Date.UTC(m.y, m.m, 15)).toLocaleDateString(lang === "de" ? "de-DE" : "en-GB", {
+        month: "long",
+        timeZone: "UTC",
+      });
+      const dir = (a, b) => (a === null || b === null ? "" : a > b ? "up" : "down");
+      items.push({
+        k: t("f_month", { m: name }),
+        v: fmtL(m.used ?? 0, lang),
+        d: m.prev === null ? "" : t("f_prev_upto", { d: m.upTo, l: fmtL(m.prev, lang) }),
+        cls: dir(m.used, m.prev),
+      });
+      const ytd = yearToDate(this._data.days, tz, now);
+      items.push({
+        k: t("f_year", { y: ytd.year }),
+        v: fmtL(ytd.cur, lang),
+        d: ytd.prev === null ? "" : t("f_prev_ytd", { l: fmtL(ytd.prev, lang) }),
+        cls: dir(ytd.cur, ytd.prev),
+      });
+      if (price !== null && m.used !== null)
+        items.push({
+          k: t("f_costs", { m: name }),
+          v: euro((m.used * price) / 100),
+          d: t("f_costs_at", { p: fmtNum(price, lang, 2) }),
+        });
+    }
+    if (price !== null && tank.level !== null)
+      items.push({
+        k: t("f_value"),
+        v: euro((tank.level * price) / 100),
+        d: t(current !== null ? "f_value_d" : "f_value_paid"),
+      });
+    return items;
+  }
+
+  _mountPrice() {
+    const root = this.shadowRoot;
+    const plot = root?.getElementById("p-plot");
+    if (!plot) return;
+    const { t, lang, tz } = this._ctx();
+    const $ = (id) => root.getElementById(id);
+    const { current, paid } = this._prices();
+    const weeks = this._data?.weeks || [];
+    $("p-hint").textContent = this._config.price_entity ? t("hint_price", { id: this._config.price_entity }) : "";
+    if (weeks.length < 2) {
+      const v = current ?? paid;
+      $("p-readout").innerHTML =
+        `<span class="v num">${v === null ? "–" : fmtNum(v, lang, 2)}<small>${esc(v === null ? t("price_none") : t("price_now"))}</small></span>` +
+        `<span class="k">${esc(t("price_starting"))}</span>`;
+      plot.hidden = true;
+      return;
+    }
+    const view = priceView(weeks, {
+      t,
+      lang,
+      tz,
+      current,
+      paid,
+      deliveries: deliveries(this._data.days),
+      week: isoWeek,
+    });
+    const pos = (i) => `left:${((view.xOf(i) / W) * 100).toFixed(2)}%;top:${((view.yOf(i) / PH) * 100).toFixed(2)}%`;
+    plot.innerHTML = `<svg viewBox="0 0 ${W} ${PH}" preserveAspectRatio="none" aria-hidden="true">${view.svg}</svg>
+      ${view.marks.map((m) => `<div class="mark" style="${pos(m.i)}"></div>`).join("")}
+      <div class="mark now" style="${pos(view.n - 1)}"></div>
+      <div class="hl" hidden></div><div class="hdot" hidden></div>`;
+    $("p-readout").innerHTML = view.rest;
+    $("p-axis").innerHTML = view.axis.map((a) => `<span>${esc(a)}</span>`).join("");
+    $("p-legend").innerHTML = view.legend
+      .map(([kind, color, txt]) => `<span><i class="sw ${kind}" style="--sw:${color}"></i>${esc(txt)}</span>`)
+      .join("");
+    scrub(plot, view, $("p-readout"));
   }
 
   // ---------- data ----------
@@ -193,10 +302,13 @@ export class OilOverviewCard extends OilCardBase {
     const token = ++this._token;
     const tz = tzOf(this._hass);
     try {
-      const raw = await fetchDaily(this._hass, this._cache, this._config, tz);
+      const [raw, weeks] = await Promise.all([
+        fetchDaily(this._hass, this._cache, this._config, tz),
+        fetchWeekly(this._hass, this._cache, this._config.price_entity, tz).catch(() => []),
+      ]);
       if (token !== this._token) return;
       const days = deriveDays(raw.level, tz, Number(this._config.refill_threshold) || 100);
-      this._data = { days, temps: tempsByDay(raw.temp, tz), error: null };
+      this._data = { days, temps: tempsByDay(raw.temp, tz), weeks, error: null };
       const tank = readTank(this._hass, this._config);
       this._scen = scenarios(days, { level: tank.level, reserve: tank.reserve, tz, daysReach: tank.daysReach });
     } catch (err) {
@@ -276,34 +388,7 @@ export class OilOverviewCard extends OilCardBase {
       .join("");
     $("hint").textContent = view.hint;
 
-    const hl = plot.querySelector(".hl");
-    const dot = plot.querySelector(".hdot");
-    const pick = (ev) => {
-      const r = plot.getBoundingClientRect();
-      const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-      let i;
-      if (view.xOf) {
-        const target = fx * W;
-        i = 0;
-        for (let k = 1; k < view.n; k++) if (Math.abs(view.xOf(k) - target) < Math.abs(view.xOf(i) - target)) i = k;
-      } else i = Math.min(view.n - 1, Math.floor(fx * view.n));
-      const px = view.xOf ? view.xOf(i) / W : (i + 0.5) / view.n;
-      hl.hidden = false;
-      hl.style.left = `${(px * 100).toFixed(2)}%`;
-      if (view.yOf) {
-        dot.hidden = false;
-        dot.style.left = `${(px * 100).toFixed(2)}%`;
-        dot.style.top = `${((view.yOf(i) / H) * 100).toFixed(2)}%`;
-      }
-      $("readout").innerHTML = view.at(i);
-    };
-    plot.onpointermove = pick;
-    plot.onpointerdown = pick;
-    plot.onpointerleave = () => {
-      hl.hidden = true;
-      dot.hidden = true;
-      $("readout").innerHTML = view.rest;
-    };
+    scrub(plot, view, $("readout"));
   }
 
   _header({ t, tank, status, color, lang, tz, now }) {

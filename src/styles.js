@@ -101,6 +101,12 @@ button:focus-visible { outline: 2px solid var(--ooc-accent); outline-offset: 2px
 .plot .bar.prev { fill: color-mix(in srgb, var(--ooc-sub) 40%, transparent); }
 .plot polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .plot .avg, .plot .lvl { stroke: var(--ooc-oil); }
+.plot.small { height: 130px; }
+.plot .price { stroke: var(--ooc-temp); }
+.plot .parea { fill: color-mix(in srgb, var(--ooc-temp) 14%, transparent); }
+.plot .meanline { stroke: var(--ooc-sub); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.plot .mark { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; box-sizing: border-box; pointer-events: none; background: var(--ooc-card); border: 3px solid var(--ooc-good); }
+.plot .mark.now { border-color: var(--ooc-temp); }
 .plot .fc { stroke: var(--ooc-oil); stroke-dasharray: 5 4; opacity: .85; }
 .plot .temp { stroke: var(--ooc-temp); stroke-dasharray: 3 3; }
 .plot .area { fill: color-mix(in srgb, var(--ooc-oil) 18%, transparent); }
@@ -160,6 +166,14 @@ button:focus-visible { outline: 2px solid var(--ooc-accent); outline-offset: 2px
 .cbars i.cur { background: var(--ooc-oil); }
 .cbars i.prev { background: color-mix(in srgb, var(--ooc-sub) 40%, transparent); }
 @container (max-width: 400px) { .crow { grid-template-columns: 62px minmax(0, 1fr) 42px 42px 52px; gap: 6px; } .kpis { grid-template-columns: minmax(0, 1fr); } }
+
+/* footer */
+.footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 12px 8px; border-top: 1px solid var(--ooc-line); padding-top: 14px; }
+.footer .k { font-size: 12px; color: var(--ooc-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.footer .v { font-size: 15px; font-weight: 500; margin-top: 2px; }
+.footer .d { font-size: 11px; margin-top: 1px; color: var(--ooc-sub); }
+.footer .d.down { color: color-mix(in srgb, var(--ooc-good) 62%, var(--ooc-text)); }
+.footer .d.up { color: color-mix(in srgb, var(--ooc-warn) 62%, var(--ooc-text)); }
 
 /* mini card */
 .mini { display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-width: 0; }

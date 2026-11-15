@@ -247,3 +247,26 @@ export function yearToDate(days, tz, now = new Date()) {
   const reaches = days.length && days[0].key <= `${p.y - 1}-01-07`;
   return { year: p.y, cur, prev: reaches ? prev : null };
 }
+
+/** Weekly mean of the price sensor over the last two years: [{ start, mean }] oldest first (HA weeks start Monday). */
+export function fetchWeekly(hass, cache, id, tz, now = new Date()) {
+  if (!id) return Promise.resolve([]);
+  const start = dayStart(now, tz, -735);
+  return cache.get(`weekly|${id}|${dayKey(now, tz)}`, Date.now() + 60 * MIN, async () => {
+    const res = await hass.callWS(statsRequest([id], start, new Date(now.getTime() + 60 * MIN), "week", ["mean"]));
+    return (res?.[id] || [])
+      .map((r) => ({ start: new Date(ms(r.start)), mean: val(r.mean) }))
+      .filter((r) => r.mean !== null)
+      .sort((a, b) => a.start - b.start);
+  });
+}
+
+/** ISO week "KW 46/26" / "W46/26" of `date` in `tz`. */
+export function isoWeek(date, tz) {
+  const p = parts(date.getTime(), tz);
+  const x = new Date(Date.UTC(p.y, p.m, p.d));
+  const wd = x.getUTCDay() || 7;
+  x.setUTCDate(x.getUTCDate() + 4 - wd);
+  const y0 = Date.UTC(x.getUTCFullYear(), 0, 1);
+  return { week: Math.ceil(((x - y0) / 864e5 + 1) / 7), year: x.getUTCFullYear() };
+}

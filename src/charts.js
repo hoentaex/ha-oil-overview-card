@@ -205,3 +205,88 @@ export function levelView(days, { t, lang, tz, capacity, reserve, now, forecast 
     hint: t("hint_level"),
   };
 }
+
+export const PH = 130;
+
+/**
+ * Price: weekly means as a line (no forecast), the two-year mean dashed, deliveries as dots on the line.
+ * `weeks` [{ start, mean }], `current` the sensor's price now, `paid` the price of the last delivery.
+ */
+export function priceView(weeks, { t, lang, tz, current, paid, deliveries = [], week }) {
+  const n = weeks.length;
+  const vals = weeks.map((w) => w.mean);
+  const lo = Math.floor((Math.min(...vals) - 2) / 5) * 5;
+  const hi = Math.ceil((Math.max(...vals) + 2) / 5) * 5;
+  const x = (i) => (n === 1 ? W / 2 : 4 + (i / (n - 1)) * (W - 8));
+  const y = (v) => PH - 4 - ((v - lo) / (hi - lo || 1)) * (PH - 12);
+  const mean = vals.reduce((s, v) => s + v, 0) / n;
+  const pts = weeks.map((w, i) => [x(i), y(w.mean)]);
+  const gridVals = [lo, (lo + hi) / 2, hi];
+  let svg = gridVals
+    .map((v) => `<line class="grid" x1="0" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`)
+    .join("");
+  svg += `<line class="meanline" x1="0" x2="${W}" y1="${y(mean).toFixed(1)}" y2="${y(mean).toFixed(1)}"/>`;
+  svg += `<polygon class="parea" points="${x(0).toFixed(1)},${PH} ${pts.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(" ")} ${x(n - 1).toFixed(1)},${PH}"/>`;
+  svg += line(pts, "price");
+  const weekOf = (d) => weeks.findIndex((w, i) => d >= w.start && (i === n - 1 || d < weeks[i + 1].start));
+  const marks = deliveries.map((d) => ({ i: weekOf(d.start), litres: d.litres })).filter((m) => m.i >= 0);
+  const kw = (d) => {
+    const k = week(d, tz);
+    return t("kw", { w: k.week, y: String(k.year).slice(2) });
+  };
+  const min = weeks.reduce((a, b) => (b.mean < a.mean ? b : a));
+  const max = weeks.reduce((a, b) => (b.mean > a.mean ? b : a));
+  const now = current ?? vals[n - 1];
+  const vsPaid = paid ? Math.round(((now - paid) / paid) * 100) : null;
+  const rest = readout(
+    fmtNum(now, lang, 2),
+    t(current !== null && current !== undefined ? "price_now" : "price_week", { w: kw(weeks[n - 1].start) }),
+    esc(
+      [
+        t("price_lo_hi", {
+          lo: fmtNum(min.mean, lang, 2),
+          lw: kw(min.start),
+          hi: fmtNum(max.mean, lang, 2),
+          hw: kw(max.start),
+        }),
+        vsPaid === null ? "" : t("vs_paid", { p: `${vsPaid > 0 ? "+" : ""}${vsPaid}` }),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    ),
+  );
+  const at = (i) => {
+    const m = marks.find((k) => k.i === i);
+    // The paid price is known only for the last delivery.
+    const last = marks.length && m === marks[marks.length - 1];
+    const sub = m
+      ? paid && last
+        ? t("delivery_week", { l: fmtL(m.litres, lang), c: fmtNum((m.litres * paid) / 100, lang) })
+        : t("delivery_week_np", { l: fmtL(m.litres, lang) })
+      : t("price_mean", { n, v: fmtNum(mean, lang, 2) });
+    return readout(fmtNum(weeks[i].mean, lang, 2), t("price_week", { w: kw(weeks[i].start) }), esc(sub));
+  };
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) =>
+    weeks[Math.round(f * (n - 1))].start.toLocaleDateString(locale(lang), {
+      month: "short",
+      year: "2-digit",
+      timeZone: tz,
+    }),
+  );
+  return {
+    svg,
+    n,
+    h: PH,
+    at,
+    rest,
+    marks,
+    xOf: (i) => pts[i][0],
+    yOf: (i) => pts[i][1],
+    axis: ticks,
+    legend: [
+      ["line", "var(--ooc-temp)", t("lg_week_mean")],
+      ...(marks.length ? [["bar", "var(--ooc-good)", t("lg_delivery")]] : []),
+      ["dash", "var(--ooc-sub)", t("lg_mean_weeks", { n })],
+    ],
+  };
+}
