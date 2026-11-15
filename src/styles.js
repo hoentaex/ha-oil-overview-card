@@ -80,6 +80,43 @@ button:focus-visible { outline: 2px solid var(--ooc-accent); outline-offset: 2px
 .facts b { font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
 @container (max-width: 360px) { .tank { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; } .tankbox { height: 130px; } .big { font-size: 26px; } }
 
+/* consumption panel */
+.panel { border-radius: 12px; padding: 14px 16px; background: var(--ooc-tile); display: flex; flex-direction: column; gap: 10px; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: color-mix(in srgb, var(--ooc-text) 5%, transparent); }
+.seg button { font-size: 13px; font-weight: 500; border: 0; border-radius: 10px; min-height: 36px; cursor: pointer; padding: 0 6px; background: transparent; }
+.seg button:hover:not([aria-pressed="true"]) { background: color-mix(in srgb, var(--ooc-text) 8%, transparent); }
+.seg button[aria-pressed="true"] { background: var(--ooc-oil); color: #1b130a; }
+/* Always exactly two lines (value, then details) so nothing jumps while scrubbing. */
+.readout { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; height: 50px; min-width: 0; }
+.readout > span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.readout .v { font-size: 24px; font-weight: 500; line-height: 1.2; }
+.readout .v small { font-size: 13px; color: var(--ooc-sub); font-weight: 400; margin-left: 4px; }
+.readout .k { font-size: 12px; color: var(--ooc-sub); }
+.plot { position: relative; height: 150px; touch-action: pan-y; cursor: crosshair; }
+.plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.plot .grid { stroke: var(--ooc-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.plot .bar { fill: color-mix(in srgb, var(--ooc-oil) 38%, transparent); }
+.plot .bar.cur { fill: var(--ooc-oil); }
+.plot .bar.cur.partial { fill-opacity: .55; }
+.plot .bar.prev { fill: color-mix(in srgb, var(--ooc-sub) 40%, transparent); }
+.plot polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.plot .avg, .plot .lvl { stroke: var(--ooc-oil); }
+.plot .temp { stroke: var(--ooc-temp); stroke-dasharray: 3 3; }
+.plot .area { fill: color-mix(in srgb, var(--ooc-oil) 18%, transparent); }
+.plot .refill { stroke: var(--ooc-good); stroke-width: 3; vector-effect: non-scaling-stroke; }
+.plot .resband { fill: color-mix(in srgb, var(--ooc-warn) 10%, transparent); }
+.plot .resline { stroke: var(--ooc-warn); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.plot .hl { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ooc-sub); pointer-events: none; }
+.plot .hdot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; box-sizing: border-box; pointer-events: none; background: var(--ooc-card); border: 2.5px solid var(--ooc-text); }
+.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ooc-sub); font-variant-numeric: tabular-nums; min-height: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ooc-sub); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; flex: none; }
+.sw.bar { width: 12px; height: 12px; border-radius: 3px; background: var(--sw); }
+.sw.line { width: 16px; height: 2px; border-radius: 1px; background: var(--sw); }
+.sw.dash { width: 16px; height: 0; border-top: 2px dashed var(--sw); }
+.hint { font-size: 12px; color: var(--ooc-sub); line-height: 1.45; }
+
 /* mini card */
 .mini { display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-width: 0; }
 .mtank { width: 30px; height: 46px; border-radius: 9px; border: 2px solid var(--ooc-line); position: relative; overflow: hidden; flex: none; background: var(--ooc-tile); }

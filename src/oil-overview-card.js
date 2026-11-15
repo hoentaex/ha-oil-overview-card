@@ -7,9 +7,23 @@
  *
  * Layout and look follow the cards of juju35 (https://github.com/juju35). MIT licence.
  */
+import { daysView, H, levelView, monthsView, W } from "./charts.js";
+import { Cache, deriveDays, fetchDaily, lastDays, lastMonths, tempsByDay, yearToDate } from "./data.js";
 import { svgIcon } from "./icons.js";
 import { readTank, STATUS_COLOR, statusOf } from "./oil.js";
-import { DEFAULTS, esc, fmtDate, fmtL, fmtMonthYear, fmtNum, fmtTime, langOf, SECTIONS, translator } from "./shared.js";
+import {
+  DEFAULTS,
+  esc,
+  fmtDate,
+  fmtL,
+  fmtMonthYear,
+  fmtNum,
+  fmtTime,
+  langOf,
+  SECTIONS,
+  translator,
+  VIEWS,
+} from "./shared.js";
 import { STYLE } from "./styles.js";
 import { miniTankHTML, tankHTML } from "./tank.js";
 import { parts, tzOf } from "./tz.js";
@@ -104,11 +118,27 @@ export class OilOverviewCard extends OilCardBase {
   }
 
   getCardSize() {
-    return 5;
+    return 9;
   }
 
   getGridOptions() {
     return { columns: 12, min_columns: 6, rows: "auto" };
+  }
+
+  constructor() {
+    super();
+    this._cache = new Cache();
+    this._data = null;
+    this._view = null;
+    this._token = 0;
+  }
+
+  setConfig(config) {
+    super.setConfig(config);
+    if (!VIEWS.includes(this._view)) this._view = VIEWS.includes(config.default_view) ? config.default_view : "days";
+    this._cache.clear();
+    this._data = null;
+    this._levelSig = "";
   }
 
   _render() {
@@ -121,11 +151,132 @@ export class OilOverviewCard extends OilCardBase {
     if (!config.level_entity) body = `<div class="empty">${svgIcon("alert")}<span>${esc(t("no_level"))}</span></div>`;
     else if (tank.level === null)
       body = `<div class="empty">${svgIcon("alert")}<span>${esc(t("unavailable", { id: config.level_entity }))}</span></div>`;
-    else if (show("tank")) body = this._tankSection(x);
+    else body = (show("tank") ? this._tankSection(x) : "") + (show("consumption") ? this._consumptionSection(x) : "");
     this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card>
       ${show("header") ? this._header(x) : ""}
       <div class="content">${body}</div>
     </ha-card>`;
+    this._mountChart();
+    this._maybeLoad();
+  }
+
+  // ---------- data ----------
+
+  /** (Re)load the statistics on first use and whenever the level got a new reading. */
+  _maybeLoad() {
+    if (!this._config.level_entity || !this._config.sections.includes("consumption")) return;
+    const s = this._hass.states[this._config.level_entity];
+    const sig = `${s?.state}@${s?.last_updated ?? ""}`;
+    if (sig === this._levelSig) return;
+    if (this._levelSig) this._cache.clear();
+    this._levelSig = sig;
+    this._load();
+  }
+
+  async _load() {
+    const token = ++this._token;
+    const tz = tzOf(this._hass);
+    try {
+      const raw = await fetchDaily(this._hass, this._cache, this._config, tz);
+      if (token !== this._token) return;
+      const days = deriveDays(raw.level, tz, Number(this._config.refill_threshold) || 100);
+      this._data = { days, temps: tempsByDay(raw.temp, tz), error: null };
+    } catch (err) {
+      if (token !== this._token) return;
+      this._data = { days: [], temps: new Map(), error: String(err?.message || err) };
+    }
+    this._mountChart();
+  }
+
+  // ---------- consumption ----------
+
+  _consumptionSection({ t }) {
+    const btn = (v) =>
+      `<button type="button" data-view="${v}" aria-pressed="${this._view === v}">${esc(t(`v_${v}`))}</button>`;
+    return `<section class="consumption">
+      <div class="section-title">${svgIcon("bars")}<span>${esc(t("consumption"))}</span><span class="note" id="note"></span></div>
+      <div class="panel">
+        <div class="seg" role="group">${VIEWS.map(btn).join("")}</div>
+        <div class="readout" id="readout"></div>
+        <div class="plot" id="plot"></div>
+        <div class="axis" id="axis"></div>
+        <div class="legend" id="legend"></div>
+        <div class="hint" id="hint"></div>
+      </div>
+    </section>`;
+  }
+
+  /** Fills the chart panel for the selected view and wires up the buttons and scrubbing. */
+  _mountChart() {
+    const root = this.shadowRoot;
+    const plot = root?.getElementById("plot");
+    if (!plot) return;
+    const x = this._ctx();
+    const { t, lang, tz, tank, now } = x;
+    const $ = (id) => root.getElementById(id);
+    for (const b of root.querySelectorAll(".seg button")) {
+      b.setAttribute("aria-pressed", String(b.dataset.view === this._view));
+      b.onclick = () => {
+        this._view = b.dataset.view;
+        this._mountChart();
+      };
+    }
+    const empty = (msg) => {
+      $("readout").innerHTML = `<span class="v">–</span><span class="k">${esc(msg)}</span>`;
+      plot.innerHTML = "";
+      for (const id of ["axis", "legend", "hint", "note"]) $(id).innerHTML = "";
+    };
+    if (!this._data) return empty(t("loading"));
+    if (this._data.error || this._data.days.length < 2)
+      return empty(t("no_history", { id: this._config.level_entity }));
+    const { days, temps } = this._data;
+    const base = Number(this._config.heating_base_temp) || 15;
+    let view;
+    if (this._view === "months")
+      view = monthsView(lastMonths(days, tz, now), { t, lang, ytd: yearToDate(days, tz, now) });
+    else if (this._view === "level")
+      view = levelView(days, { t, lang, tz, capacity: tank.capacity, reserve: tank.reserve, now });
+    else view = daysView(lastDays(days, temps, tz, now, 30), { t, lang, tz, base });
+    if (this._view === "level") view.hint = t("hint_level", { l: `${Number(this._config.refill_threshold) || 100} L` });
+
+    plot.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${view.svg}</svg>
+      <div class="hl" hidden></div><div class="hdot" hidden></div>`;
+    $("readout").innerHTML = view.rest;
+    $("note").textContent = view.note;
+    $("axis").innerHTML = view.axis.map((a) => `<span>${esc(a)}</span>`).join("");
+    $("legend").innerHTML = view.legend
+      .map(([kind, color, txt]) => `<span><i class="sw ${kind}" style="--sw:${color}"></i>${esc(txt)}</span>`)
+      .join("");
+    $("hint").textContent = view.hint;
+
+    const hl = plot.querySelector(".hl");
+    const dot = plot.querySelector(".hdot");
+    const pick = (ev) => {
+      const r = plot.getBoundingClientRect();
+      const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      let i;
+      if (view.xOf) {
+        const target = fx * W;
+        i = 0;
+        for (let k = 1; k < view.n; k++) if (Math.abs(view.xOf(k) - target) < Math.abs(view.xOf(i) - target)) i = k;
+      } else i = Math.min(view.n - 1, Math.floor(fx * view.n));
+      const px = view.xOf ? view.xOf(i) / W : (i + 0.5) / view.n;
+      hl.hidden = false;
+      hl.style.left = `${(px * 100).toFixed(2)}%`;
+      if (view.yOf) {
+        dot.hidden = false;
+        dot.style.left = `${(px * 100).toFixed(2)}%`;
+        dot.style.top = `${((view.yOf(i) / H) * 100).toFixed(2)}%`;
+      }
+      $("readout").innerHTML = view.at(i);
+    };
+    plot.onpointermove = pick;
+    plot.onpointerdown = pick;
+    plot.onpointerleave = () => {
+      hl.hidden = true;
+      dot.hidden = true;
+      $("readout").innerHTML = view.rest;
+    };
   }
 
   _header({ t, tank, status, color, lang, tz, now }) {
