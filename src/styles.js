@@ -175,6 +175,13 @@ button:focus-visible { outline: 2px solid var(--ooc-accent); outline-offset: 2px
 .footer .d.down { color: color-mix(in srgb, var(--ooc-good) 62%, var(--ooc-text)); }
 .footer .d.up { color: color-mix(in srgb, var(--ooc-warn) 62%, var(--ooc-text)); }
 
+/* buttons: open (mini), close (dialog) */
+.zoom { flex: none; cursor: pointer; width: 40px; height: 40px; margin: -4px -8px -4px 0; padding: 0; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; color: var(--ooc-sub); }
+.zoom .icon { width: 20px; height: 20px; }
+.zoom:hover { background: color-mix(in srgb, var(--ooc-sub) 16%, transparent); color: var(--ooc-text); }
+.wrap { display: flex; flex-direction: column; gap: 8px; }
+.mini .zoom { width: 44px; height: 44px; margin: 0; border-radius: 12px; background: var(--ooc-tile); }
+
 /* mini card */
 .mini { display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-width: 0; }
 .mtank { width: 30px; height: 46px; border-radius: 9px; border: 2px solid var(--ooc-line); position: relative; overflow: hidden; flex: none; background: var(--ooc-tile); }

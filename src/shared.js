@@ -24,11 +24,14 @@ export const DEFAULTS = {
   refill_threshold: 100,
   default_view: "days",
   animations: true,
+  popup: false,
 };
 
 const STRINGS = {
   de: {
     title: "Heizöl",
+    open: "Details öffnen",
+    close: "Schließen",
     tank: "Tank",
     of_capacity: "von ≈ {cap} Tankinhalt",
     of_capacity_exact: "von {cap} Tankinhalt",
@@ -154,6 +157,8 @@ const STRINGS = {
   },
   en: {
     title: "Heating oil",
+    open: "Open details",
+    close: "Close",
     tank: "Tank",
     of_capacity: "of ≈ {cap} capacity",
     of_capacity_exact: "of {cap} capacity",

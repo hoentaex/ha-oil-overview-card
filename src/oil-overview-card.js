@@ -22,7 +22,9 @@ import {
 } from "./data.js";
 import { scenarios } from "./forecast.js";
 import { compareSection, footerSection, priceSection, rangeSection } from "./sections.js";
+import { detectConfig } from "./editor.js";
 import { svgIcon } from "./icons.js";
+import "./popup.js";
 import { scrub } from "./scrub.js";
 import { readTank, STATUS_COLOR, statusOf } from "./oil.js";
 import {
@@ -43,6 +45,11 @@ import { miniTankHTML, tankHTML } from "./tank.js";
 import { parts, tzOf } from "./tz.js";
 
 const VERSION = __VERSION__;
+// One cache for all cards on the page: the full card and the mini card share the recorder requests.
+const SHARED = new Cache();
+const expandIcon = svgIcon("expand");
+const collapseIcon = svgIcon("collapse");
+const closeIcon = svgIcon("close");
 
 /** "heute 17:18" / "gestern 17:18" / "morgen 17:21" / "28.01.2026" relative to `now`, in the server's time zone. */
 export function relWhen(date, now, lang, tz, t) {
@@ -77,6 +84,11 @@ class OilCardBase extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._sig = "";
+    this._cache = SHARED;
+    this._data = null;
+    this._scen = null;
+    this._token = 0;
+    this._levelSig = "";
   }
 
   setConfig(config) {
@@ -84,7 +96,48 @@ class OilCardBase extends HTMLElement {
     const sections = Array.isArray(config.sections) ? config.sections.filter((s) => SECTIONS.includes(s)) : SECTIONS;
     this._config = { ...DEFAULTS, ...config, sections };
     this._sig = "";
+    this._data = null;
+    this._scen = null;
+    this._levelSig = "";
     if (this._hass) this._render();
+  }
+
+  /** Whether this card shows anything from the history (the full card without those sections does not). */
+  _wantsHistory() {
+    return true;
+  }
+
+  /** (Re)load the statistics on first use and whenever the level got a new reading. */
+  _maybeLoad() {
+    if (!this._config.level_entity || !this._wantsHistory()) return;
+    const s = this._hass.states[this._config.level_entity];
+    const sig = `${s?.state}@${s?.last_updated ?? ""}`;
+    if (sig === this._levelSig) return;
+    if (this._levelSig) this._cache.clear();
+    this._levelSig = sig;
+    this._load();
+  }
+
+  async _load() {
+    const token = ++this._token;
+    const tz = tzOf(this._hass);
+    const wantsPrice = this._config.sections.includes("price") && this._config.price_entity && !this._mini;
+    try {
+      const [raw, weeks] = await Promise.all([
+        fetchDaily(this._hass, this._cache, this._config, tz),
+        wantsPrice ? fetchWeekly(this._hass, this._cache, this._config.price_entity, tz).catch(() => []) : [],
+      ]);
+      if (token !== this._token) return;
+      const days = deriveDays(raw.level, tz, Number(this._config.refill_threshold) || 100);
+      this._data = { days, temps: tempsByDay(raw.temp, tz), weeks, error: null };
+      const tank = readTank(this._hass, this._config);
+      this._scen = scenarios(days, { level: tank.level, reserve: tank.reserve, tz, daysReach: tank.daysReach });
+    } catch (err) {
+      if (token !== this._token) return;
+      this._data = { days: [], temps: new Map(), weeks: [], error: String(err?.message || err) };
+      this._scen = [];
+    }
+    this._render();
   }
 
   set hass(hass) {
@@ -124,15 +177,12 @@ class OilCardBase extends HTMLElement {
 }
 
 export class OilOverviewCard extends OilCardBase {
+  static getConfigElement() {
+    return document.createElement("oil-overview-card-editor");
+  }
+
   static getStubConfig(hass) {
-    const ids = Object.keys(hass?.states || {});
-    const find = (re) => ids.find((id) => re.test(id)) || "";
-    return {
-      type: "custom:oil-overview-card",
-      level_entity: find(/^sensor\..*(filllevelquantity|fill_level|fuellstand|heizol.*stand)/i),
-      percent_entity: find(/^sensor\..*filllevelpercent/i),
-      last_measurement_entity: find(/^sensor\..*lastmeasurement/i),
-    };
+    return { type: "custom:oil-overview-card", ...detectConfig(hass) };
   }
 
   getCardSize() {
@@ -143,20 +193,13 @@ export class OilOverviewCard extends OilCardBase {
     return { columns: 12, min_columns: 6, rows: "auto" };
   }
 
-  constructor() {
-    super();
-    this._cache = new Cache();
-    this._data = null;
-    this._view = null;
-    this._token = 0;
+  setConfig(config) {
+    if (!VIEWS.includes(this._view)) this._view = VIEWS.includes(config?.default_view) ? config.default_view : "days";
+    super.setConfig(config);
   }
 
-  setConfig(config) {
-    super.setConfig(config);
-    if (!VIEWS.includes(this._view)) this._view = VIEWS.includes(config.default_view) ? config.default_view : "days";
-    this._cache.clear();
-    this._data = null;
-    this._levelSig = "";
+  _wantsHistory() {
+    return ["consumption", "range", "price", "compare", "footer"].some((s) => this._config.sections.includes(s));
   }
 
   _render() {
@@ -188,6 +231,8 @@ export class OilOverviewCard extends OilCardBase {
     </ha-card>`;
     this._mountChart();
     this._mountPrice();
+    const close = this.shadowRoot.querySelector("[data-close]");
+    if (close) close.onclick = () => this.dispatchEvent(new CustomEvent("ooc-close"));
     this._maybeLoad();
   }
 
@@ -285,40 +330,6 @@ export class OilOverviewCard extends OilCardBase {
     scrub(plot, view, $("p-readout"));
   }
 
-  // ---------- data ----------
-
-  /** (Re)load the statistics on first use and whenever the level got a new reading. */
-  _maybeLoad() {
-    if (!this._config.level_entity || !this._config.sections.includes("consumption")) return;
-    const s = this._hass.states[this._config.level_entity];
-    const sig = `${s?.state}@${s?.last_updated ?? ""}`;
-    if (sig === this._levelSig) return;
-    if (this._levelSig) this._cache.clear();
-    this._levelSig = sig;
-    this._load();
-  }
-
-  async _load() {
-    const token = ++this._token;
-    const tz = tzOf(this._hass);
-    try {
-      const [raw, weeks] = await Promise.all([
-        fetchDaily(this._hass, this._cache, this._config, tz),
-        fetchWeekly(this._hass, this._cache, this._config.price_entity, tz).catch(() => []),
-      ]);
-      if (token !== this._token) return;
-      const days = deriveDays(raw.level, tz, Number(this._config.refill_threshold) || 100);
-      this._data = { days, temps: tempsByDay(raw.temp, tz), weeks, error: null };
-      const tank = readTank(this._hass, this._config);
-      this._scen = scenarios(days, { level: tank.level, reserve: tank.reserve, tz, daysReach: tank.daysReach });
-    } catch (err) {
-      if (token !== this._token) return;
-      this._data = { days: [], temps: new Map(), error: String(err?.message || err) };
-      this._scen = [];
-    }
-    this._render();
-  }
-
   // ---------- consumption ----------
 
   _consumptionSection({ t }) {
@@ -403,6 +414,7 @@ export class OilOverviewCard extends OilCardBase {
       <div class="logo" style="--c:${color}">${svgIcon("drop")}</div>
       <div class="titles"><div class="name">${esc(c.name || t("title"))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>
       <span class="pill" style="--c:${color}" title="${esc(pill.text)}"><span class="dot"></span><span>${esc(pill.text)}</span></span>
+      ${c._dialog ? `<button type="button" class="zoom" data-close aria-label="${esc(t("close"))}">${closeIcon}</button>` : ""}
     </div>`;
   }
 
@@ -437,23 +449,57 @@ export class OilOverviewCard extends OilCardBase {
   }
 }
 
+/**
+ * One row: small tank, name, range pill, litres. The button opens the full card as a dialog (`popup: true`,
+ * default) or expands it below the row (`popup: false`).
+ */
 export class OilOverviewMiniCard extends OilCardBase {
+  static getConfigElement() {
+    return document.createElement("oil-overview-mini-card-editor");
+  }
+
   static getStubConfig(hass) {
-    return { ...OilOverviewCard.getStubConfig(hass), type: "custom:oil-overview-mini-card" };
+    return { type: "custom:oil-overview-mini-card", ...detectConfig(hass) };
+  }
+
+  constructor() {
+    super();
+    this._mini = true;
+    this._expanded = false;
+  }
+
+  setConfig(config) {
+    super.setConfig({ popup: true, ...config });
+    if (this._inline) this._inline.setConfig(this._mainConfig());
+  }
+
+  set hass(hass) {
+    super.hass = hass;
+    if (this._dialog?.isOpen) this._dialog.hass = hass;
+    if (this._inline) this._inline.hass = hass;
+  }
+
+  get hass() {
+    return this._hass;
   }
 
   getCardSize() {
-    return 1;
+    return this._expanded ? 10 : 1;
   }
 
   getGridOptions() {
-    return { columns: 12, min_columns: 3, rows: 1 };
+    return { columns: 12, min_columns: 3, rows: "auto" };
+  }
+
+  _mainConfig() {
+    const { popup, ...rest } = this._config;
+    return { ...rest, type: "custom:oil-overview-card" };
   }
 
   _render() {
     if (!this._config || !this._hass) return;
     const { t, tank, status, color, lang, tz, now, animate } = this._ctx();
-    const pill = pillOf(tank, status, now, lang, tz, t);
+    const pill = pillOf(tank, status, now, lang, tz, t, this._scen?.[0]?.emptyAt ?? null);
     const detail =
       tank.level === null
         ? esc(t("st_unknown"))
@@ -464,7 +510,16 @@ export class OilOverviewMiniCard extends OilCardBase {
           ]
             .filter(Boolean)
             .join(" · ");
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card>
+    const inline = this._config.popup === false;
+    const btn = `<button type="button" class="zoom" data-open ${inline ? `aria-expanded="${this._expanded}"` : 'aria-haspopup="dialog"'} aria-label="${esc(t("open"))}">${inline && this._expanded ? collapseIcon : expandIcon}</button>`;
+    if (!this.shadowRoot.firstChild) {
+      this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="wrap"><div data-row></div><div data-inline></div></div>`;
+      this.shadowRoot.addEventListener("click", (e) => {
+        const open = e.target.closest?.("[data-open]");
+        if (open) this._open(open);
+      });
+    }
+    this.shadowRoot.querySelector("[data-row]").innerHTML = `<ha-card>
       <div class="mini">
         ${miniTankHTML({ percent: tank.percent, animate })}
         <div class="mmain">
@@ -472,8 +527,32 @@ export class OilOverviewMiniCard extends OilCardBase {
             <span class="pill" style="--c:${color}" title="${esc(pill.text)}"><span class="dot"></span><span>${esc(pill.short)}</span></span></div>
           <div class="mdetail">${detail}</div>
         </div>
+        ${btn}
       </div>
     </ha-card>`;
+    this._maybeLoad();
+  }
+
+  _open(opener) {
+    const t = translator(langOf(this._hass, this._config));
+    if (this._config.popup === false) {
+      this._expanded = !this._expanded;
+      const box = this.shadowRoot.querySelector("[data-inline]");
+      if (this._expanded) {
+        this._inline = document.createElement("oil-overview-card");
+        this._inline.setConfig(this._mainConfig());
+        this._inline.hass = this._hass;
+        box.append(this._inline);
+      } else {
+        box.replaceChildren();
+        this._inline = null;
+      }
+      this._render();
+      this.dispatchEvent(new Event("iron-resize", { bubbles: true, composed: true }));
+      return;
+    }
+    this._dialog = this._dialog || document.createElement("oil-overview-dialog");
+    this._dialog.open({ config: this._mainConfig(), hass: this._hass, opener, label: this._config.name || t("title") });
   }
 }
 
