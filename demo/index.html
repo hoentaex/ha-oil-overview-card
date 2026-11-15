@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oil Overview Card – Demo</title>
+    <style>
+      /* Catppuccin Latte / Mocha, as the author's HA themes */
+      .light {
+        --primary-text-color: #4c4f69; --secondary-text-color: #5c5f77; --card-background-color: #eff1f5; --ha-card-background: #eff1f5;
+        --secondary-background-color: #e6e9ef; --divider-color: #ccd0da; --primary-color: #8839ef; --text-primary-color: #eff1f5;
+        background: #dce0e8;
+      }
+      .dark {
+        --primary-text-color: #cdd6f4; --secondary-text-color: #a6adc8; --card-background-color: #1e1e2e; --ha-card-background: #1e1e2e;
+        --secondary-background-color: #181825; --divider-color: #313244; --primary-color: #cba6f7; --text-primary-color: #1e1e2e;
+        background: #11111b;
+      }
+      body { margin: 0; font-family: Roboto, Inter, system-ui, sans-serif; }
+      .bar { padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 14px; background: #fff; border-bottom: 1px solid #ddd; }
+      .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .col { padding: 20px; color: var(--primary-text-color); display: flex; flex-direction: column; gap: 16px; align-items: center; }
+      .col > * { width: min(100%, 460px); }
+      @media (max-width: 900px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <label>Füllstand <input type="range" id="level" min="0" max="2980" step="1" value="2264" /> <output id="levelOut">2264 L</output></label>
+      <label><input type="checkbox" id="unavailable" /> Sensor nicht verfügbar</label>
+      <label><input type="checkbox" id="anim" checked /> Animation</label>
+      <label>Sprache <select id="lang"><option>de</option><option>en</option></select></label>
+    </div>
+    <div class="cols">
+      <div class="col light" id="light"></div>
+      <div class="col dark" id="dark"></div>
+    </div>
+    <script type="module">
+      // Stand-in for Home Assistant's ha-card: background, border and radius from the theme.
+      customElements.define(
+        "ha-card",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            this.attachShadow({ mode: "open" }).innerHTML =
+              "<style>:host{display:block;box-sizing:border-box;background:var(--ha-card-background);border:1px solid var(--divider-color);border-radius:var(--ha-card-border-radius,16px)}</style><slot></slot>";
+          }
+        },
+      );
+      await import("../dist/ha-oil-overview-card.js");
+      import { CONFIG, makeHass } from "./mock.js";
+
+      const q = new URLSearchParams(location.search);
+      const $ = (id) => document.getElementById(id);
+      const ui = { level: $("level"), out: $("levelOut"), unavailable: $("unavailable"), anim: $("anim"), lang: $("lang") };
+      if (q.get("level")) ui.level.value = q.get("level");
+      ui.lang.value = q.get("lang") || "de";
+
+      const cards = [];
+      const build = () => {
+        cards.length = 0;
+        for (const col of ["light", "dark"]) {
+          const el = $(col);
+          el.replaceChildren();
+          for (const type of ["oil-overview-card", "oil-overview-mini-card"]) {
+            const card = document.createElement(type);
+            card.setConfig({ type: `custom:${type}`, ...CONFIG, animations: ui.anim.checked });
+            el.append(card);
+            cards.push(card);
+          }
+        }
+        update();
+      };
+      const update = () => {
+        ui.out.textContent = `${ui.level.value} L`;
+        const hass = makeHass({ lang: ui.lang.value, level: Number(ui.level.value), unavailable: ui.unavailable.checked });
+        for (const c of cards) c.hass = hass;
+      };
+      ui.level.addEventListener("input", update);
+      ui.unavailable.addEventListener("change", update);
+      ui.lang.addEventListener("change", update);
+      ui.anim.addEventListener("change", build);
+      build();
+      window.__demo = { update, build };
+    </script>
+  </body>
+</html>

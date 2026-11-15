@@ -1,0 +1,19 @@
+{
+  "name": "ha-oil-overview-card",
+  "version": "0.0.1",
+  "description": "Lovelace card for Home Assistant: heating oil tank, consumption, range and price in one card.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "biome check src test scripts demo",
+    "check": "biome check src test scripts demo && node scripts/build.mjs && node --check dist/ha-oil-overview-card.js",
+    "test": "TZ=America/New_York node --test test/*.test.mjs",
+    "demo": "node scripts/build.mjs && node scripts/serve.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "esbuild": "0.25.12"
+  }
+}
