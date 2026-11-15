@@ -9,6 +9,8 @@
  */
 import { daysView, H, levelView, monthsView, W } from "./charts.js";
 import { Cache, deriveDays, fetchDaily, lastDays, lastMonths, tempsByDay, yearToDate } from "./data.js";
+import { scenarios } from "./forecast.js";
+import { compareSection, rangeSection } from "./sections.js";
 import { svgIcon } from "./icons.js";
 import { readTank, STATUS_COLOR, statusOf } from "./oil.js";
 import {
@@ -44,10 +46,14 @@ export function relWhen(date, now, lang, tz, t) {
   return fmtDate(date, lang, tz);
 }
 
-/** Header pill: the range when a days-reach sensor is set, else the tank status. */
-export function pillOf(tank, status, now, lang, tz, t) {
-  if (status === "ok" && tank.daysReach !== null && tank.daysReach > 0) {
-    const until = new Date(now.getTime() + tank.daysReach * 864e5);
+/**
+ * Header pill: the forecast's empty date (or, before the history is loaded, the days-reach sensor) while the tank
+ * is above the reserve; else the tank status.
+ */
+export function pillOf(tank, status, now, lang, tz, t, emptyAt = null) {
+  const reach = tank.daysReach !== null && tank.daysReach > 0 ? new Date(now.getTime() + tank.daysReach * 864e5) : null;
+  const until = emptyAt || reach;
+  if (status === "ok" && until) {
     return { text: t("reach_until", { date: fmtMonthYear(until, lang, tz) }), short: fmtMonthYear(until, lang, tz) };
   }
   const text = t(`st_${status}`);
@@ -151,7 +157,17 @@ export class OilOverviewCard extends OilCardBase {
     if (!config.level_entity) body = `<div class="empty">${svgIcon("alert")}<span>${esc(t("no_level"))}</span></div>`;
     else if (tank.level === null)
       body = `<div class="empty">${svgIcon("alert")}<span>${esc(t("unavailable", { id: config.level_entity }))}</span></div>`;
-    else body = (show("tank") ? this._tankSection(x) : "") + (show("consumption") ? this._consumptionSection(x) : "");
+    else {
+      body = (show("tank") ? this._tankSection(x) : "") + (show("consumption") ? this._consumptionSection(x) : "");
+      if (this._data?.days.length > 1) {
+        const ctx = { ...x, reserve: x.tank.reserve };
+        if (show("range")) body += rangeSection(this._scen || [], ctx);
+        if (show("compare")) {
+          const base = Number(config.heating_base_temp) || 15;
+          body += compareSection(lastMonths(this._data.days, x.tz, x.now, { temps: this._data.temps, base }), ctx);
+        }
+      }
+    }
     this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card>
       ${show("header") ? this._header(x) : ""}
       <div class="content">${body}</div>
@@ -181,11 +197,14 @@ export class OilOverviewCard extends OilCardBase {
       if (token !== this._token) return;
       const days = deriveDays(raw.level, tz, Number(this._config.refill_threshold) || 100);
       this._data = { days, temps: tempsByDay(raw.temp, tz), error: null };
+      const tank = readTank(this._hass, this._config);
+      this._scen = scenarios(days, { level: tank.level, reserve: tank.reserve, tz, daysReach: tank.daysReach });
     } catch (err) {
       if (token !== this._token) return;
       this._data = { days: [], temps: new Map(), error: String(err?.message || err) };
+      this._scen = [];
     }
-    this._mountChart();
+    this._render();
   }
 
   // ---------- consumption ----------
@@ -235,7 +254,15 @@ export class OilOverviewCard extends OilCardBase {
     if (this._view === "months")
       view = monthsView(lastMonths(days, tz, now), { t, lang, ytd: yearToDate(days, tz, now) });
     else if (this._view === "level")
-      view = levelView(days, { t, lang, tz, capacity: tank.capacity, reserve: tank.reserve, now });
+      view = levelView(days, {
+        t,
+        lang,
+        tz,
+        capacity: tank.capacity,
+        reserve: tank.reserve,
+        now,
+        forecast: this._scen?.[0]?.points || [],
+      });
     else view = daysView(lastDays(days, temps, tz, now, 30), { t, lang, tz, base });
     if (this._view === "level") view.hint = t("hint_level", { l: `${Number(this._config.refill_threshold) || 100} L` });
 
@@ -281,7 +308,7 @@ export class OilOverviewCard extends OilCardBase {
 
   _header({ t, tank, status, color, lang, tz, now }) {
     const c = this._config;
-    const pill = pillOf(tank, status, now, lang, tz, t);
+    const pill = pillOf(tank, status, now, lang, tz, t, this._scen?.[0]?.emptyAt ?? null);
     const subParts = [];
     if (tank.lastMeasurement) subParts.push(t("measured", { when: relWhen(tank.lastMeasurement, now, lang, tz, t) }));
     if (tank.nextMeasurement && tank.nextMeasurement > now)

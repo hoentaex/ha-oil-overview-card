@@ -144,10 +144,10 @@ export function monthsView(rows, { t, lang, ytd }) {
 }
 
 /** The level over all recorded days, deliveries as green strokes, the reserve as a red band. */
-export function levelView(days, { t, lang, tz, capacity, reserve, now }) {
+export function levelView(days, { t, lang, tz, capacity, reserve, now, forecast = [] }) {
   const n = days.length;
   const t0 = days[0].start.getTime();
-  const t1 = Math.max(now.getTime(), days[n - 1].start.getTime() + 864e5);
+  const t1 = Math.max(now.getTime(), days[n - 1].start.getTime() + 864e5, ...forecast.map((p) => p.t));
   const top = niceMax(Math.max(capacity || 0, ...days.map((d) => d.end)), 500);
   const x = (tm) => ((tm - t0) / (t1 - t0)) * W;
   const y = (v) => H - (v / top) * (H - 4);
@@ -157,6 +157,8 @@ export function levelView(days, { t, lang, tz, capacity, reserve, now }) {
     svg += `<rect class="resband" x="0" y="${y(reserve).toFixed(1)}" width="${W}" height="${(H - y(reserve)).toFixed(1)}"/><line class="resline" x1="0" x2="${W}" y1="${y(reserve).toFixed(1)}" y2="${y(reserve).toFixed(1)}"/>`;
   svg += `<polygon class="area" points="${pts[0][0].toFixed(1)},${H} ${pts.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(" ")} ${pts[n - 1][0].toFixed(1)},${H}"/>`;
   svg += line(pts, "lvl");
+  if (forecast.length > 1)
+    svg += line([[pts[n - 1][0], pts[n - 1][1]], ...forecast.slice(1).map((p) => [x(p.t), y(p.v)])], "fc");
   for (const d of days.filter((d) => d.delivered > 0)) {
     const xx = x(d.start.getTime() + 864e5).toFixed(1);
     svg += `<line class="refill" x1="${xx}" x2="${xx}" y1="${y(d.end - d.delivered).toFixed(1)}" y2="${y(d.end).toFixed(1)}"/>`;
@@ -196,6 +198,7 @@ export function levelView(days, { t, lang, tz, capacity, reserve, now }) {
     axis: ticks,
     legend: [
       ["line", "var(--ooc-oil)", t("lg_level")],
+      ...(forecast.length > 1 ? [["dash", "var(--ooc-oil)", t("lg_forecast")]] : []),
       ["bar", "var(--ooc-good)", t("lg_delivery")],
       ["dash", "var(--ooc-warn)", t("lg_reserve", { l: fmtL(reserve, lang) })],
     ],

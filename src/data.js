@@ -145,26 +145,84 @@ export function byMonth(days, tz) {
   return m;
 }
 
-/** The last 12 calendar months (oldest first) with this year's and the previous year's litres. */
-export function lastMonths(days, tz, now = new Date()) {
-  const m = byMonth(days, tz);
+const COVERAGE = 0.8;
+
+/**
+ * Litres (and heating degree days) of one calendar month, up to day `upTo` of the month. null when fewer than
+ * 80 % of those days have a value — a month the history only half covers would mislead.
+ */
+function monthAgg(days, temps, key, upTo, base) {
+  let used = 0;
+  let n = 0;
+  let hdd = 0;
+  let tn = 0;
+  for (const d of days) {
+    if (!d.key.startsWith(key) || Number(d.key.slice(8)) > upTo) continue;
+    if (d.used !== null) {
+      used += d.used;
+      n += 1;
+    }
+  }
+  for (const [k, temp] of temps || []) {
+    if (!k.startsWith(key) || Number(k.slice(8)) > upTo) continue;
+    hdd += Math.max(0, base - temp);
+    tn += 1;
+  }
+  const need = Math.floor(upTo * COVERAGE);
+  return { used: n >= need && n > 0 ? used : null, hdd: tn >= need && tn > 0 ? hdd : null };
+}
+
+/**
+ * The last 12 calendar months (oldest first): litres and heating degree days of the month and of the same month a
+ * year earlier. For the running month both are counted up to today's day of the month, so they compare fairly.
+ */
+export function lastMonths(days, tz, now = new Date(), { temps = new Map(), base = 15 } = {}) {
   const p = parts(now.getTime(), tz);
   const out = [];
   for (let i = 11; i >= 0; i--) {
     const y = p.m - i < 0 ? p.y - 1 : p.y;
     const mo = (((p.m - i) % 12) + 12) % 12;
-    const key = `${y}-${String(mo + 1).padStart(2, "0")}`;
-    const prevKey = `${y - 1}-${String(mo + 1).padStart(2, "0")}`;
+    const mm = String(mo + 1).padStart(2, "0");
+    const current = i === 0;
+    const len = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+    const upTo = current ? p.d : len;
+    const cur = monthAgg(days, temps, `${y}-${mm}`, upTo, base);
+    const prev = monthAgg(
+      days,
+      temps,
+      `${y - 1}-${mm}`,
+      current ? p.d : new Date(Date.UTC(y - 1, mo + 1, 0)).getUTCDate(),
+      base,
+    );
     out.push({
       y,
       m: mo,
-      key,
-      used: m.get(key)?.used ?? null,
-      prev: m.get(prevKey)?.used ?? null,
-      current: i === 0,
+      key: `${y}-${mm}`,
+      used: cur.used,
+      prev: prev.used,
+      hdd: cur.hdd,
+      prevHdd: prev.hdd,
+      current,
+      upTo,
     });
   }
   return out;
+}
+
+/**
+ * Litres per day for each calendar month (0 = January): the mean over all complete months of the history.
+ * null for a month the history does not cover yet.
+ */
+export function monthlyProfile(days, tz, now = new Date()) {
+  const sums = Array.from({ length: 12 }, () => ({ used: 0, n: 0 }));
+  const today = dayKey(now, tz);
+  for (const d of days) {
+    if (d.used === null || d.key === today) continue;
+    const m = Number(d.key.slice(5, 7)) - 1;
+    sums[m].used += d.used;
+    sums[m].n += 1;
+  }
+  return sums.map((s) => (s.n >= 20 ? s.used / s.n : null));
 }
 
 /** Deliveries: [{ start, litres }] newest last. */

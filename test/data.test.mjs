@@ -56,23 +56,33 @@ test("lastDays: 30 calendar days in the server's zone, a missing day is null, 7-
 });
 
 test("lastMonths and yearToDate: months with the previous year, YTD only when the history reaches January", () => {
+  // Every day from 1 Jan 2025 to 15 Nov 2026: 2 L a day in 2025, 3 L a day in 2026 (starting high enough).
   const rows = [];
-  for (let m = 1; m <= 12; m++)
-    for (const d of [1, 15]) rows.push(row(2025, m, d, 3000 - (m - 1) * 100 - (d === 15 ? 50 : 0)));
-  for (let m = 1; m <= 11; m++)
-    for (const d of [1, 15]) rows.push(row(2026, m, d, 1800 - (m - 1) * 100 - (d === 15 ? 50 : 0)));
+  let level = 5000;
+  for (
+    let t = day(2025, 1, 1);
+    t <= day(2026, 11, 15);
+    t = zoned(2025, 0, 1, 0, TZ).getTime() + rows.length * 864e5 + 864e5
+  ) {
+    const y = new Date(t).getUTCFullYear();
+    rows.push({ start: t, min: level, max: level, mean: level });
+    level -= y === 2025 ? 2 : 3;
+    if (rows.length > 700) break;
+  }
   const days = deriveDays(rows, TZ);
   const now = new Date(day(2026, 11, 15) + 12 * 3600e3);
   const months = lastMonths(days, TZ, now);
   assert.equal(months.length, 12);
   assert.equal(months.at(-1).key, "2026-11");
   assert.equal(months.at(-1).current, true);
-  assert.equal(months.at(-1).used, 100);
-  assert.equal(months.at(-1).prev, 100);
+  assert.equal(months.at(-1).used, 45);
+  assert.equal(months.at(-1).prev, 30);
   const ytd = yearToDate(days, TZ, now);
   assert.equal(ytd.year, 2026);
   assert.ok(ytd.prev !== null);
-  assert.equal(yearToDate(days.slice(10), TZ, now).prev, null);
+  assert.equal(yearToDate(days.slice(30), TZ, now).prev, null);
+  // A month the history only partly covers is null, not a too-small number.
+  assert.equal(lastMonths(days.slice(-20), TZ, now)[10].used, null);
 });
 
 test("fetchDaily asks the recorder once per day for level and temperature, daily min / max / mean", async () => {
