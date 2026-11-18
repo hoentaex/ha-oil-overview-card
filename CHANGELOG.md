@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 (2026-11-18)
+
+- **Illustrated header** on the card and the mini card, in the style of juju35's cards: a 90 px banner with the title,
+  the range pill and the reading times on a cellar wall, the tank drawn at the right (oil level with a moving surface
+  and bubbles, reserve line, the OilFox on top) and the level as a readout beside it, on a 10 px floor strip.
+- The tank picture of the Tank section moves into the banner; `illustration: false` keeps the classic header and the
+  tank picture. Night picture with Home Assistant's dark theme, `illustration_theme: day | night` forces it. Both in
+  the visual editor.
+- The status pill follows the title when it fits, else goes under the subtitle (its dot alone when there is no room).
+- Mini card: the banner with a frosted open button, space for a delivery and litres above the reserve under it.
+
 ## 0.1.0 (2026-11-15)
 
 First release.

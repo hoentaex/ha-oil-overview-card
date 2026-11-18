@@ -1,6 +1,6 @@
 {
   "name": "ha-oil-overview-card",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lovelace card for Home Assistant: heating oil tank, consumption, range and price in one card.",
   "private": true,
   "type": "module",

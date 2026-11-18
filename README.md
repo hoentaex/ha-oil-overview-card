@@ -136,6 +136,8 @@ reserve: 300
 | `sections` | alle | Auswahl und Reihenfolge aus `header`, `tank`, `consumption`, `range`, `price`, `compare`, `footer` |
 | `default_view` | `days` | Verbrauchsansicht beim Öffnen: `days`, `months`, `level` |
 | `animations` | `true` | Öl-Animation; bei „Bewegung reduzieren“ ist sie immer aus |
+| `illustration` | `true` | Illustrierter Kopf: der Tank im Keller (Füllstand, Reservelinie, OilFox), Titel und Pill auf der Kellerwand. `false` = schlichter Kopf mit dem Tankbild im Abschnitt Tank |
+| `illustration_theme` | wie das Theme | `day` oder `night`; ohne Angabe kommt das Nachtbild mit dem dunklen Theme |
 | `name` / `subtitle` | – | Eigener Titel / eigene Unterzeile |
 | `language` | HA-Sprache | `de` oder `en` |
 
@@ -144,7 +146,7 @@ Farben lassen sich über das Theme oder `card_mod` setzen: `--ooc-oil-color`, `-
 
 ### Mini-Karte
 
-`custom:oil-overview-mini-card` zeigt Tank, Liter, Prozent und „reicht bis …“ in einer Zeile. Der Knopf rechts öffnet
+`custom:oil-overview-mini-card` zeigt denselben illustrierten Kopf mit Tank, Litern, Prozent und „reicht bis …“, darunter Platz für die Lieferung und Liter bis zur Reserve (mit `illustration: false` alles in einer Zeile). Der Knopf rechts öffnet
 die große Karte als Popup; mit `popup: false` klappt sie stattdessen darunter auf. Sie nimmt dieselben Optionen.
 
 <img src="screenshots/mini-light.png" alt="Mini-Karte" width="420">

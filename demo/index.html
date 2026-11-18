@@ -74,7 +74,8 @@
       const update = () => {
         ui.out.textContent = `${ui.level.value} L`;
         const hass = makeHass({ lang: ui.lang.value, level: Number(ui.level.value), unavailable: ui.unavailable.checked });
-        for (const c of cards) c.hass = hass;
+        // The dark column shows the night picture of the illustrated header (a dark theme means night).
+        for (const c of cards) c.hass = c.closest("#dark") ? { ...hass, themes: { darkMode: true } } : hass;
       };
       ui.level.addEventListener("input", update);
       ui.unavailable.addEventListener("change", update);

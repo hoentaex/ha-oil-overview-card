@@ -40,11 +40,14 @@ import {
   translator,
   VIEWS,
 } from "./shared.js";
-import { STYLE } from "./styles.js";
+import { BANNER_STYLE, fitPill, isNight, sceneSVG } from "./banner.js";
+import { STYLE as BASE_STYLE } from "./styles.js";
 import { miniTankHTML, tankHTML } from "./tank.js";
 import { parts, tzOf } from "./tz.js";
 
 const VERSION = __VERSION__;
+const STYLE = BASE_STYLE + BANNER_STYLE;
+let uidSeq = 0;
 // One cache for all cards on the page: the full card and the mini card share the recorder requests.
 const SHARED = new Cache();
 const expandIcon = svgIcon("expand");
@@ -89,6 +92,56 @@ class OilCardBase extends HTMLElement {
     this._scen = null;
     this._token = 0;
     this._levelSig = "";
+    this._uid = `o${++uidSeq}`;
+  }
+
+  _illustrated() {
+    return this._config.illustration !== false;
+  }
+
+  /** Measure the banner's pill after each render, and again whenever the card is resized. */
+  _afterRender() {
+    if (!this._illustrated()) return;
+    fitPill(this.shadowRoot);
+    if (!this._ro && typeof ResizeObserver !== "undefined") {
+      this._ro = new ResizeObserver(() => fitPill(this.shadowRoot));
+      this._ro.observe(this);
+    }
+  }
+
+  /**
+   * The illustrated header: logo, title with the range pill and the subtitle on the cellar wall, the tank at the
+   * right. `button` is the close (dialog) or open (mini card) button, drawn as a frosted round button top right.
+   */
+  _banner({ t, tank, color, lang, animate }, { sub, pillText, button }) {
+    const c = this._config;
+    const res = tank.capacity && tank.reserve > 0 ? tank.reserve / tank.capacity : 0;
+    const scene = sceneSVG({
+      uid: this._uid,
+      percent: tank.percent,
+      reserveFrac: res,
+      pctLabel: tank.percent === null ? "" : `${fmtNum(tank.percent, lang)} %`,
+      levelLabel: tank.level === null ? "" : esc(fmtL(tank.level, lang)),
+      animate,
+    });
+    const name = c.name || t("title");
+    return `<div class="banner${isNight(this._hass, c) ? " night" : ""}">
+      ${scene}
+      <div class="head">
+        <div class="logo" style="--c:${color}">${svgIcon("drop")}</div>
+        <div class="titles">
+          <div class="trow"><div class="name" title="${esc(name)}">${esc(name)}</div><span class="pill" style="--c:${color}" title="${esc(pillText)}"><span class="dot"></span><span>${esc(pillText)}</span></span></div>
+          ${sub ? `<div class="sub" title="${esc(sub)}">${esc(sub)}</div>` : ""}
+        </div>
+      </div>
+      <div class="floor"></div>
+      ${button || ""}
+    </div>`;
+  }
+
+  disconnectedCallback() {
+    this._ro?.disconnect();
+    this._ro = null;
   }
 
   setConfig(config) {
@@ -160,9 +213,11 @@ class OilCardBase extends HTMLElement {
       .filter(([k, v]) => typeof v === "string" && /_entity$/.test(k) && v)
       .map(([, v]) => v);
     const st = this._hass?.states || {};
-    return [langOf(this._hass, c), ...ids.map((id) => `${id}=${st[id]?.state}@${st[id]?.last_updated ?? ""}`)].join(
-      "|",
-    );
+    return [
+      langOf(this._hass, c),
+      this._hass?.themes?.darkMode ? "dark" : "light",
+      ...ids.map((id) => `${id}=${st[id]?.state}@${st[id]?.last_updated ?? ""}`),
+    ].join("|");
   }
 
   _ctx() {
@@ -229,6 +284,7 @@ export class OilOverviewCard extends OilCardBase {
       ${show("header") ? this._header(x) : ""}
       <div class="content">${body}</div>
     </ha-card>`;
+    this._afterRender();
     this._mountChart();
     this._mountPrice();
     const close = this.shadowRoot.querySelector("[data-close]");
@@ -402,7 +458,8 @@ export class OilOverviewCard extends OilCardBase {
     scrub(plot, view, $("readout"));
   }
 
-  _header({ t, tank, status, color, lang, tz, now }) {
+  _header(x) {
+    const { t, tank, status, color, lang, tz, now } = x;
     const c = this._config;
     const pill = pillOf(tank, status, now, lang, tz, t, this._scen?.[0]?.emptyAt ?? null);
     const subParts = [];
@@ -410,6 +467,12 @@ export class OilOverviewCard extends OilCardBase {
     if (tank.nextMeasurement && tank.nextMeasurement > now)
       subParts.push(t("next", { when: relWhen(tank.nextMeasurement, now, lang, tz, t) }));
     const sub = c.subtitle || subParts.join(" · ");
+    if (this._illustrated()) {
+      const button = c._dialog
+        ? `<button type="button" class="zoom" data-close aria-label="${esc(t("close"))}">${closeIcon}</button>`
+        : "";
+      return this._banner(x, { sub, pillText: pill.text, button });
+    }
     return `<div class="header">
       <div class="logo" style="--c:${color}">${svgIcon("drop")}</div>
       <div class="titles"><div class="name">${esc(c.name || t("title"))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>
@@ -437,8 +500,8 @@ export class OilOverviewCard extends OilCardBase {
     const pctLabel = tank.percent === null ? "" : `${fmtNum(tank.percent, lang)} %`;
     return `<section>
       <div class="section-title">${svgIcon("tank")}<span>${esc(t("tank"))}</span></div>
-      <div class="tank">
-        ${tankHTML({ percent: tank.percent, reserve: tank.reserve, capacity: tank.capacity, label: pctLabel, reserveLabel: esc(t("reserve")), animate })}
+      <div class="tank${this._illustrated() && this._config.sections.includes("header") ? " flat" : ""}">
+        ${this._illustrated() && this._config.sections.includes("header") ? "" : tankHTML({ percent: tank.percent, reserve: tank.reserve, capacity: tank.capacity, label: pctLabel, reserveLabel: esc(t("reserve")), animate })}
         <div>
           <div class="big">${fmtNum(tank.level, lang)}<small>L</small></div>
           ${capLine ? `<div class="of">${esc(capLine)}</div>` : ""}
@@ -518,6 +581,26 @@ export class OilOverviewMiniCard extends OilCardBase {
         const open = e.target.closest?.("[data-open]");
         if (open) this._open(open);
       });
+    }
+    if (this._illustrated()) {
+      const x = this._ctx();
+      const sub =
+        tank.level === null
+          ? t("st_unknown")
+          : `${fmtL(tank.level, lang)}${tank.percent === null ? "" : ` · ${fmtNum(tank.percent, lang)} %`}`;
+      const facts = [
+        tank.space === null ? "" : `<span>${esc(t("space"))} <b>${fmtL(tank.space, lang)}</b></span>`,
+        tank.reserve > 0 && tank.aboveReserve !== null
+          ? `<span>${esc(t("reserve_left", { res: fmtL(tank.reserve, lang) }))} <b>${fmtL(Math.max(0, tank.aboveReserve), lang)}</b></span>`
+          : "",
+      ].filter(Boolean);
+      this.shadowRoot.querySelector("[data-row]").innerHTML = `<ha-card>
+        ${this._banner(x, { sub, pillText: pill.text, button: btn })}
+        ${facts.length ? `<div class="mfacts">${facts.join("")}</div>` : ""}
+      </ha-card>`;
+      this._afterRender();
+      this._maybeLoad();
+      return;
     }
     this.shadowRoot.querySelector("[data-row]").innerHTML = `<ha-card>
       <div class="mini">

@@ -32,6 +32,11 @@ const LABELS = {
     language: "Sprache",
     lang_auto: "Automatisch",
     animations: "Animation (Öl, Bläschen)",
+    illustration: "Illustrierter Kopf (Tank im Keller)",
+    illustration_theme: "Bild im Kopf",
+    theme_auto: "Wie das Theme",
+    theme_day: "Tag",
+    theme_night: "Nacht",
     popup: "Große Karte als Popup (sonst aufklappen)",
     h_capacity: "Leer = aus Litern und Prozent berechnet (ungenau bei niedrigem Stand)",
     h_level: "Der Verlauf kommt aus der Langzeitstatistik dieses Sensors",
@@ -79,6 +84,11 @@ const LABELS = {
     language: "Language",
     lang_auto: "Automatic",
     animations: "Animation (oil, bubbles)",
+    illustration: "Illustrated header (tank in the cellar)",
+    illustration_theme: "Header picture",
+    theme_auto: "Follow the theme",
+    theme_day: "Day",
+    theme_night: "Night",
     popup: "Main card as a popup (else expand)",
     h_capacity: "Empty = derived from litres and percent (inaccurate at low levels)",
     h_level: "The history comes from this sensor's long-term statistics",
@@ -166,6 +176,12 @@ export const editorSchema = (lang, { mini = false } = {}) => {
       grid(
         { name: "animations", selector: { boolean: {} } },
         ...(mini ? [{ name: "popup", selector: { boolean: {} } }] : []),
+        { name: "illustration", selector: { boolean: {} } },
+        select("illustration_theme", [
+          { value: "", label: L.theme_auto },
+          { value: "day", label: L.theme_day },
+          { value: "night", label: L.theme_night },
+        ]),
       ),
     ]),
   ];
@@ -186,6 +202,8 @@ const formDefaults = (mini) => ({
   popup: mini,
   sections: SECTIONS,
   language: "",
+  illustration: true,
+  illustration_theme: "",
   price_per_litres: "100",
 });
 

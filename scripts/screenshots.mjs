@@ -40,7 +40,7 @@ try {
       console.log(`saved screenshots/view-${view}-${theme}.png`);
     }
     const mini = page.locator(`#${theme} oil-overview-mini-card`).first();
-    await mini.locator(".mini").waitFor();
+    await mini.locator(".banner, .mini").first().waitFor();
     await page.waitForTimeout(300);
     await mini.screenshot({ path: shot(`mini-${theme}`) });
     console.log(`saved screenshots/mini-${theme}.png`);
