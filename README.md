@@ -85,10 +85,12 @@ Fehlt eine Entity oder ist sie `unavailable`, blendet die Karte den Wert oder Ab
 
 ### Installation
 
-**Über HACS / Marketplace (benutzerdefiniertes Repository):**
+**Über den Marketplace:**
 
-1. HACS → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/hoentaex/ha-oil-overview-card`, Typ *Dashboard*.
-2. „Oil Overview Card“ installieren und den Browser neu laden.
+[![Repository im Marketplace öffnen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=hoentaex&repository=ha-oil-overview-card&category=plugin)
+
+oder von Hand: **Marketplace → ⋮ → Benutzerdefinierte Repositories** → `https://github.com/hoentaex/ha-oil-overview-card`,
+Typ **Dashboard** → *Oil Overview Card* installieren → Browser neu laden.
 
 **Manuell:** `ha-oil-overview-card.js` aus dem [letzten Release](https://github.com/hoentaex/ha-oil-overview-card/releases/latest)
 nach `config/www/` kopieren und als Ressource `/local/ha-oil-overview-card.js` (Typ *JavaScript-Modul*) eintragen.
@@ -205,8 +207,13 @@ are noise. Days and months follow the Home Assistant server's time zone.
 **Requirements:** Home Assistant 2024.8+, a fill level in litres with long-term statistics. Recommended: tank capacity,
 outdoor temperature. Optional: a price sensor with statistics (per 100 L), helpers for the last delivery.
 
-**Install:** HACS → custom repositories → `https://github.com/hoentaex/ha-oil-overview-card` (type *Dashboard*), or
-copy `ha-oil-overview-card.js` from the latest release to `config/www/` and add it as a JavaScript module resource.
+**Install** via the Marketplace:
+
+[![Open this repository in the Marketplace](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=hoentaex&repository=ha-oil-overview-card&category=plugin)
+
+or by hand: **Marketplace → ⋮ → Custom repositories** → `https://github.com/hoentaex/ha-oil-overview-card` (type
+*Dashboard*). Without the Marketplace, copy `ha-oil-overview-card.js` from the latest release to `config/www/` and add it
+as a JavaScript module resource.
 
 ```yaml
 type: custom:oil-overview-card
