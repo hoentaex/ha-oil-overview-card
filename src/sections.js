@@ -2,6 +2,7 @@
 // litres per degree day, summer base load, and a row per month with Δ badges).
 import { daysUntil } from "./forecast.js";
 import { svgIcon } from "./icons.js";
+import { kpiGrid } from "./kpi.js";
 import { esc, fmtL, fmtMonthYear, fmtNum, locale } from "./shared.js";
 
 const title = (icon, text, note = "") =>
@@ -85,31 +86,52 @@ export function compareSection(months, { t, lang }) {
   const kc = withHdd.length && hc > 0 ? sum(withHdd, "used") / hc : null;
   const kp = withHdd.length && hp > 0 ? sum(withHdd, "prev") / hp : null;
   const summer = both.filter((r) => [5, 6, 7].includes(r.m));
-  const kpi = (k, v, b, p) =>
-    `<div class="kpi"><span class="k">${esc(k)}</span><span class="v num">${v} ${b}</span><span class="p num">${esc(p)}</span></div>`;
-  const kpis = [
-    kpi(
-      t(both.length === months.length ? "k_used" : "k_used_n", { n: both.length }),
-      esc(fmtL(cur, lang)),
-      badge(cur, prev),
-      t("prev_is", { l: fmtL(prev, lang) }),
-    ),
-  ];
-  if (withHdd.length) {
-    kpis.push(kpi(t("k_hdd"), `≈ ${fmtNum(hc, lang)}`, badge(hc, hp, true), t("k_hdd_prev", { v: fmtNum(hp, lang) })));
-    kpis.push(
-      kpi(t("k_norm"), `${fmtNum(kc, lang, 2)} L/Kd`, badge(kc, kp), t("k_norm_prev", { v: fmtNum(kp, lang, 2) })),
-    );
-  }
-  if (summer.length)
-    kpis.push(
-      kpi(
-        t("k_summer"),
-        esc(fmtL(sum(summer, "used"), lang)),
-        badge(sum(summer, "used"), sum(summer, "prev")),
-        t("k_summer_prev", { l: fmtL(sum(summer, "prev"), lang) }),
-      ),
-    );
+  const top = Math.max(cur, prev, 1);
+  const summerCur = summer.length ? sum(summer, "used") : null;
+  const summerPrev = summer.length ? sum(summer, "prev") : null;
+  // Tiles drop out when their data is missing (no temperatures: no degree days); the grid closes up.
+  const tiles = kpiGrid(
+    [
+      {
+        k: t(both.length === months.length ? "k_used" : "k_used_n", { n: both.length }),
+        v: fmtNum(cur, lang),
+        u: "L",
+        d: badge(cur, prev),
+        icon: "drop",
+        c: "var(--ooc-oil)",
+        s: t("prev_is", { l: fmtL(prev, lang) }),
+        p: (cur / top) * 100,
+        m: (prev / top) * 100,
+      },
+      {
+        k: t("k_hdd"),
+        v: withHdd.length ? `≈ ${fmtNum(hc, lang)}` : null,
+        d: badge(hc, hp, true),
+        icon: "thermo",
+        c: "var(--ooc-temp)",
+        s: t("k_hdd_prev", { v: fmtNum(hp, lang) }),
+      },
+      {
+        k: t("k_norm"),
+        v: kc !== null && kp !== null ? fmtNum(kc, lang, 2) : null,
+        u: "L/Kd",
+        d: badge(kc, kp),
+        icon: "pie",
+        c: "var(--ooc-oil)",
+        s: t("k_norm_prev", { v: fmtNum(kp, lang, 2) }),
+      },
+      {
+        k: t("k_summer"),
+        v: summerCur === null ? null : fmtNum(summerCur, lang),
+        u: "L",
+        d: badge(summerCur, summerPrev),
+        icon: "sun",
+        c: "var(--ooc-oil)",
+        s: t("k_summer_prev", { l: fmtL(summerPrev, lang) }),
+      },
+    ],
+    { cols: 2 },
+  );
   const max = Math.max(...months.flatMap((r) => [r.used ?? 0, r.prev ?? 0]), 1);
   const bar = (v, cls) =>
     v === null || v <= 0
@@ -127,7 +149,7 @@ export function compareSection(months, { t, lang }) {
     .join("");
   return `<section>
     ${head}
-    <div class="kpis">${kpis.join("")}</div>
+    ${tiles}
     <div class="cmp">
       <div class="crow head"><span>${esc(t("c_month"))}</span><span></span><span class="n">${esc(t("c_now"))}</span><span class="n">${esc(t("c_prev"))}</span><span class="b">Δ</span></div>
       ${rows}

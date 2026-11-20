@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 (2026-11-20)
+
+- **KPI tiles** (as in the tiles view of the energy card's consumers card): a round icon, the label, the value large
+  with a small unit, a sub line and a thin bar with a marker.
+- **Tank** as tiles: level (wide, bar with the reserve mark, amber at the reserve, red when almost empty), room for a
+  delivery, range (days from the forecast, else the OilFox sensor), last delivery (date, amount, days ago) and the
+  price per 100 L with the cost of filling up (the delivery price when there is no market price).
+- **12 months compared:** consumption, heating degree days, weather-adjusted consumption and summer base load as tiles
+  with the Δ badge beside the value; the consumption bar marks last year. The month table stays.
+- No gaps: a tile without a value is left out, and the last tile of a short row widens until the row is full (three
+  columns, two on a narrow card). A click on a tile opens the sensor's dialog.
+- Without the illustrated header the drawn tank stays at the left of the tiles.
+
 ## 0.2.0 (2026-11-18)
 
 - **Illustrated header** on the card and the mini card, in the style of juju35's cards: a 90 px banner with the title,

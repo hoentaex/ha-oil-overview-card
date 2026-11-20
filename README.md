@@ -31,8 +31,10 @@ Aufbau und Look orientieren sich an den Karten von [juju35](https://github.com/j
 
 ### Was die Karte zeigt
 
-- **Tank:** Füllstand mit trägem Öl und ein paar aufsteigenden Bläschen, Reservelinie, Platz für die nächste
-  Lieferung, Liter bis zur Reserve, letzte Befüllung.
+- **Tank:** Füllstand mit trägem Öl und ein paar aufsteigenden Bläschen im Kopf; darunter Kennzahl-Kacheln:
+  Tankinhalt mit Reservemarke, Platz für die nächste Lieferung, Reichweite, letzte Befüllung und Preis. Fehlt ein
+  Wert (kein Preis-Sensor, keine Lieferung), entfällt seine Kachel und die übrigen rücken ohne Lücke nach. Ein Klick
+  öffnet den Dialog des Sensors.
 - **Verbrauch** in drei Ansichten, mit dem Finger oder der Maus abfahrbar (die Werte-Zeile darüber springt nicht):
   - **30 Tage:** ein Balken je Messung, der 7-Tage-Schnitt und die Außentemperatur; dazu Liter je Heizgradtag.
   - **Monate:** die letzten 12 Monate neben dem Vorjahresmonat.
@@ -43,7 +45,7 @@ Aufbau und Look orientieren sich an den Karten von [juju35](https://github.com/j
 - **Heizölpreis:** Wochenmittel als Linie (keine Prognose), Tief und Hoch mit Kalenderwoche, Abstand zum bezahlten
   Preis, Wochen mit Lieferung markiert.
 - **12 Monate im Vergleich:** Verbrauch, Heizgradtage, witterungsbereinigter Verbrauch (L je Heizgradtag) und
-  Sommer-Grundlast gegen das Vorjahr, je Monat mit Δ-Badge. Gezählt werden nur Monate, die in beiden Jahren
+  Sommer-Grundlast gegen das Vorjahr als Kacheln mit Δ-Badge, darunter je Monat mit Δ-Badge. Gezählt werden nur Monate, die in beiden Jahren
   vollständig sind; der laufende Monat in beiden Jahren nur bis heute.
 - **Fußzeile:** dieser Monat und dieses Jahr gegen das Vorjahr, Kosten des Monats, Wert des Tankinhalts.
 
@@ -184,14 +186,16 @@ level in litres.
 > **Private hobby project**, maintained in spare time, without warranty or support: **use at your own risk.**
 > The card only reads states and statistics – it never switches anything.
 
-- **Tank** with slowly moving oil and rising bubbles, reserve line, room for a delivery, last delivery.
+- **Tank** with slowly moving oil and rising bubbles in the header; below it KPI tiles: level with the reserve mark,
+  room for a delivery, range, last delivery and price. A missing value drops its tile and the rest close up; a click
+  opens the sensor's dialog.
 - **Consumption** (scrubbable, the readout keeps two lines): 30 days with a 7-day mean and the outdoor temperature,
   12 months next to the previous year, and the level over time with deliveries and the forecast.
 - **Range:** the tank is run down day by day with the consumption per calendar month (several scenarios, plus the
   linear projections), giving “lasts until …” and “order by …”.
 - **Price:** weekly means (no forecast), low/high by calendar week, change against the price paid.
 - **12 months compared:** consumption, heating degree days, weather-adjusted litres per degree day and summer base
-  load against the previous year, only over months complete in both years.
+  load against the previous year as tiles with Δ badges, only over months complete in both years.
 - **Footer:** this month and year against last year, costs of the month, value of the oil in the tank.
 
 **Data:** everything comes from Home Assistant's long-term statistics. Consumption is derived from the level's daily

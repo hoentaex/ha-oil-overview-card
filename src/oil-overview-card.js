@@ -20,7 +20,8 @@ import {
   tempsByDay,
   yearToDate,
 } from "./data.js";
-import { scenarios } from "./forecast.js";
+import { daysUntil, scenarios } from "./forecast.js";
+import { KPI_STYLE, kpiGrid } from "./kpi.js";
 import { compareSection, footerSection, priceSection, rangeSection } from "./sections.js";
 import { detectConfig } from "./editor.js";
 import { svgIcon } from "./icons.js";
@@ -36,6 +37,7 @@ import {
   fmtNum,
   fmtTime,
   langOf,
+  locale,
   SECTIONS,
   translator,
   VIEWS,
@@ -46,7 +48,7 @@ import { miniTankHTML, tankHTML } from "./tank.js";
 import { parts, tzOf } from "./tz.js";
 
 const VERSION = __VERSION__;
-const STYLE = BASE_STYLE + BANNER_STYLE;
+const STYLE = BASE_STYLE + BANNER_STYLE + KPI_STYLE;
 let uidSeq = 0;
 // One cache for all cards on the page: the full card and the mini card share the recorder requests.
 const SHARED = new Cache();
@@ -285,6 +287,11 @@ export class OilOverviewCard extends OilCardBase {
       <div class="content">${body}</div>
     </ha-card>`;
     this._afterRender();
+    for (const el of this.shadowRoot.querySelectorAll("[data-more]"))
+      el.onclick = () =>
+        this.dispatchEvent(
+          new CustomEvent("hass-more-info", { detail: { entityId: el.dataset.more }, bubbles: true, composed: true }),
+        );
     this._mountChart();
     this._mountPrice();
     const close = this.shadowRoot.querySelector("[data-close]");
@@ -481,33 +488,95 @@ export class OilOverviewCard extends OilCardBase {
     </div>`;
   }
 
-  _tankSection({ t, tank, lang, tz, animate }) {
-    const facts = [];
-    if (tank.space !== null) facts.push([t("space"), fmtL(tank.space, lang)]);
-    if (tank.reserve > 0 && tank.aboveReserve !== null)
-      facts.push(
-        tank.aboveReserve > 0
-          ? [t("reserve_left", { res: fmtL(tank.reserve, lang) }), fmtL(tank.aboveReserve, lang)]
-          : [t("reserve_short", { res: fmtL(tank.reserve, lang) }), t("reached"), "warn"],
+  /**
+   * The tank as KPI tiles: level (wide, bar with the reserve mark), room for a delivery, range, last delivery and the
+   * price. Values that are not known leave their tile out. Without the illustrated header the drawn tank stays left.
+   */
+  _tankSection({ t, tank, lang, tz, now, status, animate }) {
+    const c = this._config;
+    const cap = tank.capacity;
+    const res = tank.reserve;
+    const emptyAt = this._scen?.[0]?.emptyAt ?? null;
+    const days = emptyAt ? daysUntil(emptyAt, now) : tank.daysReach;
+    const { current, paid } = this._prices();
+    const price = current ?? paid;
+    const ago = tank.refillDate ? Math.max(0, Math.floor((now - tank.refillDate) / 864e5)) : null;
+    const dayMonth = (d) => d.toLocaleDateString(locale(lang), { day: "2-digit", month: "2-digit", timeZone: tz });
+    const grid = (cols) =>
+      kpiGrid(
+        [
+          {
+            k: t("k_level"),
+            v: fmtNum(tank.level, lang),
+            u: cap ? `L ${t("k_of", { cap: fmtL(cap, lang) })}` : "L",
+            icon: "tank",
+            c: STATUS_COLOR[status] === STATUS_COLOR.ok ? "var(--ooc-oil)" : STATUS_COLOR[status],
+            st: status === "low" ? "warn" : status === "empty" ? "bad" : "",
+            p: tank.percent ?? undefined,
+            m: res > 0 && cap ? (res / cap) * 100 : undefined,
+            s:
+              res > 0 && tank.aboveReserve !== null
+                ? tank.aboveReserve > 0
+                  ? t("k_until_reserve", { res: fmtL(res, lang), l: fmtL(tank.aboveReserve, lang) })
+                  : t("k_reserve_reached", { res: fmtL(res, lang) })
+                : "",
+            wide: true,
+            more: c.level_entity,
+          },
+          {
+            k: t("space"),
+            v: tank.space === null ? null : fmtNum(tank.space, lang),
+            u: "L",
+            icon: "truck",
+            c: "var(--ooc-temp)",
+            more: c.level_entity,
+          },
+          {
+            k: t("k_range"),
+            v: Number.isFinite(days) && days > 0 ? fmtNum(days, lang) : null,
+            u: t("k_days_unit"),
+            icon: "calendar",
+            c: status === "ok" ? "var(--ooc-good)" : STATUS_COLOR[status],
+            s: emptyAt ? t("k_empty_on", { d: fmtMonthYear(emptyAt, lang, tz) }) : "",
+            more: c.days_reach_entity,
+          },
+          {
+            k: t("last_refill"),
+            v: tank.refillDate ? dayMonth(tank.refillDate) : null,
+            u: tank.refillAmount ? `+${fmtL(tank.refillAmount, lang)}` : "",
+            icon: "drop",
+            c: "var(--ooc-oil)",
+            s:
+              ago === null
+                ? ""
+                : ago === 0
+                  ? t("k_today")
+                  : ago === 1
+                    ? t("k_ago_1")
+                    : t("k_ago", { n: fmtNum(ago, lang) }),
+            more: c.refill_date_entity,
+          },
+          {
+            k: t(current !== null ? "k_price" : "k_paid_price"),
+            v: price === null ? null : fmtNum(price, lang, 2),
+            u: t("k_price_unit"),
+            icon: "euro",
+            c: "var(--ooc-temp)",
+            s: price !== null && tank.space ? t("k_fill_cost", { v: fmtNum((tank.space * price) / 100, lang) }) : "",
+            more: current !== null ? c.price_entity : c.paid_price_entity,
+          },
+        ],
+        { cols },
       );
-    if (tank.refillDate) {
-      const amount = tank.refillAmount ? ` · +${fmtL(tank.refillAmount, lang)}` : "";
-      facts.push([t("last_refill"), `${fmtDate(tank.refillDate, lang, tz)}${amount}`]);
-    }
-    const capLine = tank.capacity
-      ? t(tank.capacityDerived ? "of_capacity" : "of_capacity_exact", { cap: fmtL(tank.capacity, lang) })
-      : "";
+    const drawn = !(this._illustrated() && c.sections.includes("header"));
     const pctLabel = tank.percent === null ? "" : `${fmtNum(tank.percent, lang)} %`;
     return `<section>
       <div class="section-title">${svgIcon("tank")}<span>${esc(t("tank"))}</span></div>
-      <div class="tank${this._illustrated() && this._config.sections.includes("header") ? " flat" : ""}">
-        ${this._illustrated() && this._config.sections.includes("header") ? "" : tankHTML({ percent: tank.percent, reserve: tank.reserve, capacity: tank.capacity, label: pctLabel, reserveLabel: esc(t("reserve")), animate })}
-        <div>
-          <div class="big">${fmtNum(tank.level, lang)}<small>L</small></div>
-          ${capLine ? `<div class="of">${esc(capLine)}</div>` : ""}
-          ${facts.length ? `<div class="facts">${facts.map(([k, v, cls]) => `<div><span>${esc(k)}</span><b${cls ? ` class="${cls}"` : ""}>${esc(v)}</b></div>`).join("")}</div>` : ""}
-        </div>
-      </div>
+      ${
+        drawn
+          ? `<div class="tank">${tankHTML({ percent: tank.percent, reserve: res, capacity: cap, label: pctLabel, reserveLabel: esc(t("reserve")), animate })}${grid(2)}</div>`
+          : grid(3)
+      }
     </section>`;
   }
 }

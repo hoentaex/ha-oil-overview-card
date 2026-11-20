@@ -29,6 +29,7 @@
       <label>Füllstand <input type="range" id="level" min="0" max="2980" step="1" value="2264" /> <output id="levelOut">2264 L</output></label>
       <label><input type="checkbox" id="unavailable" /> Sensor nicht verfügbar</label>
       <label><input type="checkbox" id="anim" checked /> Animation</label>
+      <label><input type="checkbox" id="sparse" /> ohne Preis, Befüllung und Außentemperatur</label>
       <label>Sprache <select id="lang"><option>de</option><option>en</option></select></label>
     </div>
     <div class="cols">
@@ -52,7 +53,8 @@
 
       const q = new URLSearchParams(location.search);
       const $ = (id) => document.getElementById(id);
-      const ui = { level: $("level"), out: $("levelOut"), unavailable: $("unavailable"), anim: $("anim"), lang: $("lang") };
+      const ui = { level: $("level"), out: $("levelOut"), unavailable: $("unavailable"), anim: $("anim"), lang: $("lang"), sparse: $("sparse") };
+      ui.sparse.checked = q.get("sparse") === "1";
       if (q.get("level")) ui.level.value = q.get("level");
       ui.lang.value = q.get("lang") || "de";
 
@@ -64,7 +66,9 @@
           el.replaceChildren();
           for (const type of ["oil-overview-card", "oil-overview-mini-card"]) {
             const card = document.createElement(type);
-            card.setConfig({ type: `custom:${type}`, ...CONFIG, animations: ui.anim.checked });
+            const { price_entity, paid_price_entity, refill_date_entity, refill_amount_entity, outdoor_temp_entity, ...rest } = CONFIG;
+            const config = ui.sparse.checked ? rest : CONFIG;
+            card.setConfig({ type: `custom:${type}`, ...config, animations: ui.anim.checked });
             el.append(card);
             cards.push(card);
           }
@@ -81,6 +85,7 @@
       ui.unavailable.addEventListener("change", update);
       ui.lang.addEventListener("change", update);
       ui.anim.addEventListener("change", build);
+      ui.sparse.addEventListener("change", build);
       build();
       window.__demo = { update, build };
     </script>
